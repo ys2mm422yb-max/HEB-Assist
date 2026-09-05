@@ -1,8 +1,9 @@
-const CACHE_NAME = 'heb-assist-shell-v9';
+const CACHE_NAME = 'heb-assist-shell-v10';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
+  './bootstrap.js',
   './app.js',
   './ai-engine.js',
   './privacy-filter.js',
