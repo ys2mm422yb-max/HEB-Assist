@@ -50,8 +50,6 @@ const READY_PLACEHOLDER = notes.getAttribute('placeholder') || '';
 const LOADING_PLACEHOLDER = 'Eingabe wird freigeschaltet, sobald die lokale KI vollständig gestartet ist.';
 
 let serviceWorkerRegistration = null;
-let pendingAppReload = false;
-let updateReloadStarted = false;
 let aiLoadInProgress = false;
 
 function updateFormHint() {
@@ -238,16 +236,6 @@ function validateInput() {
   return value;
 }
 
-function hasActiveWork() {
-  return notes.value.trim().length > 0 || !copyButton.disabled;
-}
-
-function maybeReloadForUpdate() {
-  if (!pendingAppReload || updateReloadStarted || hasActiveWork()) return;
-  updateReloadStarted = true;
-  window.location.reload();
-}
-
 async function checkForAppUpdate() {
   if (!serviceWorkerRegistration || !navigator.onLine) return;
   try {
@@ -262,12 +250,6 @@ async function checkForAppUpdate() {
 
 async function setupAutomaticAppUpdates() {
   if (!('serviceWorker' in navigator)) return;
-
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (updateReloadStarted) return;
-    pendingAppReload = true;
-    maybeReloadForUpdate();
-  });
 
   try {
     serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', {
@@ -285,6 +267,9 @@ async function setupAutomaticAppUpdates() {
       });
     });
 
+    // Updates are downloaded/activated in the background, but the currently
+    // opened page is never force-reloaded. The latest app code is loaded on
+    // the next normal opening so model downloads and drafts are not lost.
     await checkForAppUpdate();
   } catch (error) {
     console.warn('Service Worker registration failed:', error?.message || error);
@@ -305,7 +290,6 @@ notes.addEventListener('input', () => {
       privacyResult.textContent = '';
     }
   }
-  maybeReloadForUpdate();
 });
 
 clearButton.addEventListener('click', () => {
@@ -313,8 +297,7 @@ clearButton.addEventListener('click', () => {
   charCount.textContent = '0 / 3500';
   privacyResult.hidden = true;
   setResult('Noch keine Formulierung erstellt.', 'empty');
-  maybeReloadForUpdate();
-  if (!pendingAppReload && isLocalAiReady()) notes.focus();
+  if (isLocalAiReady()) notes.focus();
 });
 
 generateButton.addEventListener('click', async () => {
@@ -375,14 +358,10 @@ detailsDialog.addEventListener('click', (event) => {
 
 window.addEventListener('focus', () => {
   checkForAppUpdate();
-  maybeReloadForUpdate();
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    checkForAppUpdate();
-    maybeReloadForUpdate();
-  }
+  if (!document.hidden) checkForAppUpdate();
 });
 
 window.setInterval(() => {
