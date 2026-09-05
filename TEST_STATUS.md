@@ -32,26 +32,33 @@ Stand: 2026-09-05
 
 Ergebnis: Der Transformers.js-/ONNX-Pfad ist auf dem getesteten iPhone für die eigentliche Textgenerierung nicht zuverlässig genug und wird dort nicht weiterverfolgt.
 
-## Aktuelle Gegenmaßnahme
+### gemma-webgpu 270M
 
-HEB-Assist verwendet im neuen Teststand `gemma-webgpu` 0.1.0 mit Gemma 3 270M Q8_0.
+- `gemma-webgpu` 0.1.0 mit Gemma 3 270M Q8_0 konnte auf dem realen iPhone vollständig geladen werden.
+- Die Textgenerierung lief durch, ohne den Safari-Webseitenprozess zu beenden.
+- Der erzeugte HEB-Text war jedoch fachlich unbrauchbar: starke Wiederholungsschleifen wie „Behandlungs-Körperpflege“ statt einer nachvollziehbaren HEB-Formulierung.
 
-Der wesentliche Architekturunterschied:
+Ergebnis: Die neue Laufzeit ist auf dem getesteten Gerät deutlich stabiler, das 270M-Modell ist für die gewünschte professionelle deutsche HEB-Formulierung aber nicht ausreichend.
 
-- keine Transformers.js-/ONNX-Runtime für die Generierung
-- reines WebGPU
-- Modellgewichte werden per HTTP-Range-Requests in Abschnitten geladen
-- Abschnitte werden direkt in GPU-Speicher übertragen
-- die komplette Modelldatei muss dadurch nicht gleichzeitig als großer JavaScript-/WASM-Speicher vorliegen
-- Kontextlänge aktuell auf 1024 Tokens begrenzt
-- Ausgabe aktuell auf maximal 240 Tokens begrenzt
+## Aktueller Teststand
 
-Dieser Runtime-Pfad ist laut upstream-Dokumentation auf einem realen iPhone 17 Pro Max mit Safari/iOS 26 getestet worden. Die konkrete HEB-Assist-Integration ist trotzdem erst nach eigenem Gerätetest als bestätigt anzusehen.
+HEB-Assist verwendet jetzt `gemma-webgpu` 0.1.0 mit **Gemma 3 1B Q8_0**.
+
+Zusätzliche Qualitätsmaßnahmen:
+
+- stärkere 1B-Modellvariante statt 270M
+- weiterhin speicherschonendes Range-Request-Laden direkt in GPU-Speicher
+- Kontextlänge auf 1024 Tokens begrenzt
+- vollständiger HEB-Bereich wird nicht mehr in einem einzigen langen Modellaufruf erzeugt
+- jeder offizielle HEB-Unterpunkt wird einzeln mit kurzem, gezieltem Prompt formuliert und anschließend in der App zusammengesetzt
+- Wiederholungsstrafe wurde erhöht
+- automatische Erkennung von Wiederholungsschleifen / degenerierter Ausgabe
+- bei erneut unbrauchbarer Ausgabe wird der Text verworfen statt als HEB-Entwurf angezeigt
 
 ## Noch nicht geprüft / keine Freigabe
 
-- neuer `gemma-webgpu`-Pfad noch nicht mit dem synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
-- fachliche Qualität der erzeugten HEB-A-Ausgabe noch nicht bewertet
+- Gemma-3-1B-Pfad noch nicht mit dem synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
+- fachliche Qualität der neuen HEB-A-Ausgabe noch nicht bewertet
 - HEB B noch nicht mit synthetischem Verlaufsfall bewertet
 - HEB C noch nicht mit synthetischem Abschlussfall bewertet
 - kein realer Android-Test
