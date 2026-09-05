@@ -19,11 +19,11 @@
         <p>Fachliche Formulierungen. Lokal verarbeitet.</p>
       </div>
       <div aria-label="Status der lokalen KI" style="min-width:132px;max-width:180px;display:flex;flex-direction:column;align-items:stretch;">
-        <div id="engineBadge" class="status-badge loading" aria-live="polite" style="text-align:center;">KI wird vorbereitet …</div>
+        <button id="engineBadge" class="status-badge loading" type="button" aria-live="polite" style="text-align:center;">KI wird vorbereitet …</button>
         <div id="engineProgressTrack" class="progress-track ai-progress-track" aria-hidden="true" style="width:100%;height:4px;margin:6px 0 0;">
           <div id="engineProgressBar" class="progress-bar"></div>
         </div>
-        <span id="engineStatusText" hidden>Das Sprachmodell wird automatisch im Hintergrund vorbereitet. Die App ist währenddessen bereits nutzbar.</span>
+        <span id="engineStatusText" class="sr-only">Das Sprachmodell wird automatisch im Hintergrund vorbereitet.</span>
       </div>
     </header>
 
@@ -52,17 +52,17 @@
         </select>
 
         <label for="notes">Situation in eigenen Worten</label>
-        <textarea id="notes" rows="9" maxlength="3500" placeholder="Beispiel: Benötigt morgens häufig eine verbale Erinnerung, um mit der Körperpflege zu beginnen. Nach der Erinnerung führt die Person die Körperpflege selbstständig durch. Einkäufe werden gemeinsam geplant, die benötigten Produkte sucht die Person selbst aus."></textarea>
+        <textarea id="notes" rows="9" maxlength="3500" disabled placeholder="Beispiel: Benötigt morgens häufig eine verbale Erinnerung, um mit der Körperpflege zu beginnen. Nach der Erinnerung führt die Person die Körperpflege selbstständig durch. Einkäufe werden gemeinsam geplant, die benötigten Produkte sucht die Person selbst aus."></textarea>
         <div class="field-meta">
           <span id="charCount">0 / 3500</span>
-          <button id="clearButton" class="text-button" type="button">Eingabe löschen</button>
+          <button id="clearButton" class="text-button" type="button" disabled>Eingabe löschen</button>
         </div>
 
-        <p class="quality-note"><strong>Kein Unterpunkt muss ausgewählt werden.</strong> Die App erstellt den kompletten passenden HEB-Bereich automatisch.</p>
+        <p class="quality-note"><strong>Die Eingabe wird erst freigeschaltet, wenn oben rechts „KI ist bereit ✓“ steht.</strong> Es gibt keinen versteckten Ersatzmodus, der HEB-Texte ohne das Sprachmodell erzeugt.</p>
 
         <div id="privacyResult" class="privacy-result" hidden></div>
 
-        <button id="generateButton" class="primary-button" type="button">HEB-Entwurf erstellen</button>
+        <button id="generateButton" class="primary-button" type="button" disabled>HEB-Entwurf erstellen</button>
       </div>
 
       <div class="panel result-panel">
@@ -89,10 +89,20 @@
   <dialog id="detailsDialog">
     <div class="dialog-body">
       <h2>Technik & Datenschutz</h2>
-      <p>HEB Assist startet das stärkere lokale Sprachmodell automatisch im Hintergrund. Solange es noch lädt oder auf dem Gerät nicht gestartet werden kann, bleibt die App über den schnellen lokalen Modus sofort nutzbar.</p>
-      <p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, werden neue Entwürfe mit dem stärkeren lokalen Sprachmodell erstellt. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
+      <p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist. Während des Downloads und Starts bleibt das Eingabefeld gesperrt.</p>
+      <p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
       <p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p>
-      <button id="closeDialog" class="primary-button" type="button">Schließen</button>
+
+      <div id="engineErrorBox" class="engine-error-box" hidden>
+        <strong>Technische Fehlermeldung</strong>
+        <code id="engineErrorText"></code>
+        <p>Diese Meldung enthält nur den technischen Startfehler der KI und keine HEB-Eingabe.</p>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="retryAiButton" class="secondary-button" type="button" hidden>KI erneut starten</button>
+        <button id="closeDialog" class="primary-button" type="button">Schließen</button>
+      </div>
     </div>
   </dialog>
 
