@@ -7,8 +7,9 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - HEB-Assist darf keine Abhängigkeit zu bestehenden privaten Projekten des Repository-Inhabers haben.
 - Keine gemeinsam genutzten Datenbanken, API-Schlüssel, Secrets, Nutzerkonten, Deployments oder Backends.
 - Kein Kopieren echter Fall-/Bewohnerdaten aus anderen Systemen.
-- **Das GitHub-Repository von HEB-Assist muss dauerhaft privat bleiben und darf niemals öffentlich gestellt werden.**
-- Es darf kein öffentliches Spiegel-Repository, kein öffentlicher Code-Mirror und keine Veröffentlichung interner Projektregeln oder nicht für die Öffentlichkeit bestimmter Projektdateien angelegt werden.
+- Das GitHub-Repository darf öffentlich sein. Deshalb ist **jeder Inhalt des Repositories so zu behandeln, als könnte er öffentlich eingesehen werden**.
+- **Niemals** echte Bewohner-/Falldaten, Namen, identifizierende Angaben, interne Zugangsdaten, API-Schlüssel, Secrets, vertrauliche interne Dokumente oder sonstige datenschutzrechtlich geschützte Informationen in GitHub ablegen – weder in Code noch in Commits, Issues, Pull Requests, Tests, Screenshots, Logs, Beispielen oder Dokumentation.
+- Auch synthetische Beispiele dürfen keine echten Personen oder reale Fälle nachbilden oder aus realen Fällen abgeleitet sein.
 
 ## 2. Git-Workflow
 
@@ -22,6 +23,7 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - Testdaten sind vollständig synthetisch.
 - Die App darf Eingaben nicht zu Analyse-, Telemetrie- oder Trainingszwecken versenden.
 - Externe Netzwerkzugriffe müssen dokumentiert und technisch auf das Nötigste beschränkt werden.
+- Vor jedem neuen Datei-, Log-, Screenshot-, Beispiel- oder Dokumentationsinhalt ist zu prüfen, ob darin datenschutzrelevante oder vertrauliche Informationen enthalten sein könnten.
 
 ## 4. Keine zentrale Fallhistorie in v1
 
