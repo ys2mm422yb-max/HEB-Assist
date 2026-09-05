@@ -1,15 +1,7 @@
-const BUILD_ID = '2026-09-05-2248';
+const BUILD_ID = '2026-09-05-2312';
 
 async function prepareLatestApp() {
   if ('serviceWorker' in navigator) {
-    let reloadStarted = false;
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloadStarted) return;
-      reloadStarted = true;
-      window.location.reload();
-    });
-
     try {
       const registration = await navigator.serviceWorker.register('./sw.js', {
         updateViaCache: 'none',
@@ -25,6 +17,10 @@ async function prepareLatestApp() {
     }
   }
 
+  // Never force-reload an already opened HEB Assist session here. A model
+  // download or an active draft must not be discarded just because a newer
+  // service worker becomes active. Fresh app code is picked up automatically
+  // on the next normal opening of the app.
   if (!document.hidden) {
     await import(`./app.js?build=${BUILD_ID}`);
   } else {
