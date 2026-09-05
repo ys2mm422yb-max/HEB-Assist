@@ -1,11 +1,10 @@
-const CACHE_NAME = 'heb-assist-shell-v7';
+const CACHE_NAME = 'heb-assist-shell-v8';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './ai-engine.js',
-  './fast-formulator.js',
   './privacy-filter.js',
   './heb-knowledge.js',
   './manifest.webmanifest',
