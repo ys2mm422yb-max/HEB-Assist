@@ -1,6 +1,12 @@
 import { detectSensitiveData, privacyMessage } from './privacy-filter.js';
 import { HEB_FORM_CONFIG } from './heb-knowledge.js';
 import { formulateHebDraft } from './fast-formulator.js';
+import {
+  generateHebText,
+  getLocalAiCapability,
+  isLocalAiReady,
+  preloadLocalAi,
+} from './ai-engine.js';
 
 const reportType = document.querySelector('#reportType');
 const formHint = document.querySelector('#formHint');
@@ -15,6 +21,10 @@ const privacyResult = document.querySelector('#privacyResult');
 const detailsButton = document.querySelector('#detailsButton');
 const detailsDialog = document.querySelector('#detailsDialog');
 const closeDialog = document.querySelector('#closeDialog');
+const engineBadge = document.querySelector('#engineBadge');
+const engineStatusText = document.querySelector('#engineStatusText');
+const engineProgressBar = document.querySelector('#engineProgressBar');
+const engineProgressTrack = document.querySelector('#engineProgressTrack');
 
 const INPUT_HINTS = {
   A: 'Beschreibe einfach, was aktuell gelingt, wo Unterstützung nötig ist und was ihr konkret macht. HEB Assist erstellt die passenden Punkte automatisch.',
@@ -30,6 +40,40 @@ function setResult(text, state = 'ready') {
   result.textContent = text;
   result.className = state === 'ready' ? 'result-ready' : state === 'error' ? 'result-error' : 'result-empty';
   copyButton.disabled = state !== 'ready' || !text.trim();
+}
+
+function updateEngineStatus(status = {}) {
+  const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, status.percent)) : 0;
+  engineProgressBar.style.width = `${Math.max(3, percent)}%`;
+
+  engineBadge.classList.remove('loading', 'ready', 'warning');
+
+  if (status.status === 'ready') {
+    engineBadge.textContent = 'KI ist bereit ✓';
+    engineBadge.classList.add('ready');
+    engineStatusText.textContent = 'Das stärkere lokale Sprachmodell ist einsatzbereit. Neue Entwürfe werden damit erstellt.';
+    engineProgressTrack.hidden = true;
+    return;
+  }
+
+  if (status.status === 'fallback') {
+    engineBadge.textContent = 'Schneller Modus aktiv';
+    engineBadge.classList.add('warning');
+    engineStatusText.textContent = 'Das große Sprachmodell konnte auf diesem Gerät nicht gestartet werden. HEB Assist bleibt im schnellen lokalen Modus nutzbar.';
+    engineProgressTrack.hidden = true;
+    return;
+  }
+
+  engineBadge.classList.add('loading');
+  engineProgressTrack.hidden = false;
+
+  if (status.status === 'loading') {
+    engineBadge.textContent = percent > 0 ? `KI lädt · ${Math.round(percent)}%` : 'KI wird geladen …';
+    engineStatusText.textContent = status.text || 'Das Sprachmodell wird im Hintergrund geladen. Die App ist währenddessen bereits nutzbar.';
+  } else {
+    engineBadge.textContent = 'KI wird vorbereitet …';
+    engineStatusText.textContent = 'Das Sprachmodell wird automatisch im Hintergrund vorbereitet. Die App ist währenddessen bereits nutzbar.';
+  }
 }
 
 function validateInput() {
@@ -79,19 +123,38 @@ clearButton.addEventListener('click', () => {
   notes.focus();
 });
 
-generateButton.addEventListener('click', () => {
+generateButton.addEventListener('click', async () => {
   const value = validateInput();
   if (!value) return;
 
   generateButton.disabled = true;
   copyButton.disabled = true;
 
+  const args = {
+    notes: value,
+    area: area.value,
+    formType: reportType.value,
+  };
+
   try {
-    const draft = formulateHebDraft({
-      notes: value,
-      area: area.value,
-      formType: reportType.value,
-    });
+    if (isLocalAiReady()) {
+      setResult('KI formuliert den HEB-Entwurf …', 'empty');
+      try {
+        const aiDraft = await generateHebText({
+          ...args,
+          mode: 'complete',
+          onProgress: updateEngineStatus,
+        });
+        setResult(aiDraft, 'ready');
+        updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓' });
+        return;
+      } catch (error) {
+        console.warn('Local AI generation failed, using fast fallback:', error?.message || error);
+        updateEngineStatus({ status: 'fallback', percent: 0, text: 'Schneller Modus aktiv' });
+      }
+    }
+
+    const draft = formulateHebDraft(args);
     setResult(draft, 'ready');
   } catch (error) {
     console.error('HEB draft error:', error?.message || error);
@@ -120,6 +183,18 @@ detailsDialog.addEventListener('click', (event) => {
 });
 
 updateFormHint();
+updateEngineStatus({ status: 'idle', percent: 0 });
+
+const capability = getLocalAiCapability();
+if (!capability.supported) {
+  updateEngineStatus({ status: 'fallback', percent: 0 });
+} else {
+  window.setTimeout(() => {
+    preloadLocalAi(updateEngineStatus).catch((error) => {
+      console.warn('Background AI preload failed:', error?.message || error);
+    });
+  }, 500);
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
