@@ -1,8 +1,13 @@
 import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
 
 const GEMMA_WEBGPU_URL = 'https://cdn.jsdelivr.net/npm/gemma-webgpu@0.1.0/dist/index.js';
-const MODEL_KEY = '1b';
-const MODEL_LABEL = 'Gemma 3 1B Q8_0';
+const IS_IOS = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/i.test(navigator.userAgent || '') ||
+  (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1)
+);
+const MODEL_KEY = IS_IOS ? '270m' : '1b';
+const MODEL_LABEL = IS_IOS ? 'Gemma 3 270M Q8_0' : 'Gemma 3 1B Q8_0';
+const MODEL_PROFILE = IS_IOS ? 'streaming-webgpu-ios-270m' : 'streaming-webgpu-1b';
 const CONTEXT_LENGTH = 1024;
 
 const CORE_RULES = `Du bist HEB Assist, ein fachlicher Formulierungsassistent für die sozialpsychiatrische Eingliederungshilfe.
@@ -14,6 +19,13 @@ Regeln:
 - Selbstaussage, Beobachtung und fachliche Einschätzung nicht vermischen.
 - Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
 - Wenn für den verlangten Unterpunkt Angaben fehlen, schreibe knapp: „Hierzu liegen keine ausreichenden Angaben vor.“`;
+
+const IOS_RULES = `Formuliere einen kurzen fachlichen HEB-Text in gutem Deutsch.
+Regeln:
+- Nur Tatsachen aus der Fallbeschreibung verwenden. Nichts erfinden.
+- Keine Diagnose, Ursache, Fähigkeit, Ziel oder Maßnahme ergänzen, die nicht genannt ist.
+- Sachlich, wertschätzend und ressourcenorientiert schreiben.
+- Wenn Angaben für den verlangten Unterpunkt fehlen, antworte exakt: „Hierzu liegen keine ausreichenden Angaben vor.“`;
 
 const SECTION_MODES = {
   A: [
@@ -58,7 +70,7 @@ export function getLocalAiCapability() {
   return {
     hasWebGPU,
     supported: hasWebGPU,
-    modelProfile: 'streaming-webgpu-1b',
+    modelProfile: MODEL_PROFILE,
     modelLabel: MODEL_LABEL,
     runtime: 'gemma-webgpu',
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
@@ -105,7 +117,9 @@ async function loadEngine(onProgress) {
       setModelState({
         status: 'loading',
         percent: 3,
-        text: 'Stärkeres lokales Sprachmodell wird vorbereitet …',
+        text: IS_IOS
+          ? 'Für iPhone/iPad wird das speicherschonende mobile Sprachmodell vorbereitet …'
+          : 'Stärkeres lokales Sprachmodell wird vorbereitet …',
         error: null,
       }, onProgress);
 
@@ -114,7 +128,7 @@ async function loadEngine(onProgress) {
       setModelState({
         status: 'loading',
         percent: 4,
-        text: 'Gemma 3 1B wird speicherschonend in Abschnitten geladen …',
+        text: `${MODEL_LABEL} wird in Abschnitten geladen …`,
         error: null,
       }, onProgress);
 
@@ -128,7 +142,7 @@ async function loadEngine(onProgress) {
       modelInfo = {
         id: MODEL_KEY,
         label: MODEL_LABEL,
-        profile: 'streaming-webgpu-1b',
+        profile: MODEL_PROFILE,
         device: 'webgpu',
         runtimeLabel: 'gemma-webgpu 0.1.0',
         contextLength: CONTEXT_LENGTH,
@@ -162,8 +176,9 @@ export function preloadLocalAi(onProgress) {
 function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
   const instruction = getOutputInstruction(formType, sectionMode);
+  const rules = IS_IOS ? IOS_RULES : CORE_RULES;
 
-  return `${CORE_RULES}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe:\n${instruction}\n\nFallbeschreibung:\n${notes}\n\nSchreibe nur den Inhalt dieses einen Unterpunkts, ohne Überschrift. Maximal 3 Sätze und höchstens 70 Wörter. Keine Vorbemerkung.`;
+  return `${rules}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe:\n${instruction}\n\nFallbeschreibung:\n${notes}\n\nSchreibe nur den Inhalt dieses einen Unterpunkts, ohne Überschrift. Maximal ${IS_IOS ? 2 : 3} Sätze. Keine Vorbemerkung und keine Wiederholungen.`;
 }
 
 function normalizeOutput(text) {
@@ -213,10 +228,10 @@ async function runSection(engine, prompt, options) {
 
 async function generateSection(engine, prompt) {
   let text = await runSection(engine, prompt, {
-    temperature: 0.15,
+    temperature: IS_IOS ? 0.2 : 0.15,
     topP: 0.9,
-    repPenalty: 1.22,
-    maxTokens: 90,
+    repPenalty: IS_IOS ? 1.3 : 1.22,
+    maxTokens: IS_IOS ? 70 : 90,
   });
 
   if (!isDegenerateOutput(text)) return text;
@@ -224,8 +239,8 @@ async function generateSection(engine, prompt) {
   text = await runSection(engine, `${prompt}\n\nWichtig: Keine Wort- oder Satzwiederholungen. Formuliere einen zusammenhängenden fachlichen Text.`, {
     temperature: 0.3,
     topP: 0.85,
-    repPenalty: 1.35,
-    maxTokens: 80,
+    repPenalty: IS_IOS ? 1.4 : 1.35,
+    maxTokens: IS_IOS ? 60 : 80,
   });
 
   if (isDegenerateOutput(text)) {
