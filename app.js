@@ -1,6 +1,10 @@
 import { detectSensitiveData, privacyMessage } from './privacy-filter.js';
 import { generateHebText, getLocalAiCapability } from './ai-engine.js';
+import { HEB_FORM_CONFIG } from './heb-knowledge.js';
 
+const reportType = document.querySelector('#reportType');
+const formHint = document.querySelector('#formHint');
+const choiceGrid = document.querySelector('#choiceGrid');
 const area = document.querySelector('#area');
 const notes = document.querySelector('#notes');
 const charCount = document.querySelector('#charCount');
@@ -23,6 +27,23 @@ if (!capability.supported) engineBadge.classList.add('warning');
 
 function selectedMode() {
   return document.querySelector('input[name="mode"]:checked')?.value || 'complete';
+}
+
+function renderFormOptions() {
+  const config = HEB_FORM_CONFIG[reportType.value] || HEB_FORM_CONFIG.A;
+  formHint.textContent = config.hint;
+  choiceGrid.replaceChildren();
+
+  config.modes.forEach(([value, label], index) => {
+    const wrapper = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'mode';
+    input.value = value;
+    input.checked = index === 0;
+    wrapper.append(input, document.createTextNode(` ${label}`));
+    choiceGrid.append(wrapper);
+  });
 }
 
 function setResult(text, state = 'ready') {
@@ -67,6 +88,11 @@ function validateInput() {
   return value;
 }
 
+reportType.addEventListener('change', () => {
+  renderFormOptions();
+  setResult('Noch keine Formulierung erstellt.', 'empty');
+});
+
 notes.addEventListener('input', () => {
   charCount.textContent = `${notes.value.length} / 3500`;
   if (!privacyResult.hidden) {
@@ -104,6 +130,7 @@ generateButton.addEventListener('click', async () => {
     const text = await generateHebText({
       notes: value,
       area: area.value,
+      formType: reportType.value,
       mode: selectedMode(),
       onProgress: updateProgress,
     });
@@ -137,6 +164,8 @@ closeDialog.addEventListener('click', () => detailsDialog.close());
 detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
+
+renderFormOptions();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
