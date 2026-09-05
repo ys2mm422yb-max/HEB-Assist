@@ -1,6 +1,17 @@
 import { HEB_SYSTEM_RULES, HEB_FORM_CONFIG, getOutputInstruction, FEW_SHOT_EXAMPLES } from './heb-knowledge.js';
 
-const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
+const STANDARD_MODEL = {
+  id: 'onnx-community/Qwen2.5-0.5B-Instruct',
+  label: 'Qwen2.5 0.5B',
+  profile: 'standard',
+};
+
+const APPLE_MOBILE_MODEL = {
+  id: 'onnx-community/gemma-3-270m-it-ONNX',
+  label: 'Gemma 3 270M',
+  profile: 'apple-mobile-compact',
+};
+
 const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 const ORT_WEB_VERSION = '1.26.0-dev.20260416-b7804b056c';
 const ORT_ASYNCIFY_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WEB_VERSION}/dist/`;
@@ -8,6 +19,7 @@ const ORT_ASYNCIFY_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WE
 let generatorPromise = null;
 let generatorInstance = null;
 let modelInfo = null;
+let activeModel = null;
 let modelState = {
   status: 'idle',
   percent: 0,
@@ -20,6 +32,14 @@ function setModelState(next, onProgress) {
   onProgress?.({ ...modelState });
 }
 
+function isAppleMobileDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const classicIOS = /iPhone|iPad|iPod/i.test(ua);
+  const iPadDesktopUA = navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+  return classicIOS || iPadDesktopUA;
+}
+
 function isSafari26Plus() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -30,12 +50,20 @@ function isSafari26Plus() {
   return match ? Number.parseInt(match[1], 10) >= 26 : false;
 }
 
+function selectModel() {
+  return isAppleMobileDevice() ? APPLE_MOBILE_MODEL : STANDARD_MODEL;
+}
+
 export function getLocalAiCapability() {
   const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
+  const model = selectModel();
   return {
     hasWebGPU,
     supported: hasWebGPU,
     safari26Plus: isSafari26Plus(),
+    appleMobile: isAppleMobileDevice(),
+    modelProfile: model.profile,
+    modelLabel: model.label,
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
@@ -54,9 +82,8 @@ function configureRuntimeForPlatform(env) {
   env.allowLocalModels = false;
   env.useBrowserCache = true;
 
-  // Transformers.js 4.2.0 predates the upstream Safari-26 WebGPU fix
-  // (huggingface/transformers.js#1700). Safari >= 26 needs the asyncify
-  // ONNX Runtime Web build for the WebGPU backend to initialise correctly.
+  // Transformers.js 4.2.0 predates the upstream Safari-26 WebGPU fix.
+  // Safari >= 26 needs the asyncify ONNX Runtime Web build for WebGPU.
   if (isSafari26Plus() && env.backends?.onnx?.wasm) {
     env.backends.onnx.wasm.wasmPaths = {
       mjs: `${ORT_ASYNCIFY_BASE}ort-wasm-simd-threaded.asyncify.mjs`,
@@ -68,7 +95,7 @@ function configureRuntimeForPlatform(env) {
 async function chooseDtype() {
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) {
-    throw new Error('WebGPU ist vorhanden, aber Safari konnte keinen GPU-Adapter bereitstellen.');
+    throw new Error('WebGPU ist vorhanden, aber der Browser konnte keinen GPU-Adapter bereitstellen.');
   }
   return adapter.features?.has('shader-f16') ? 'q4f16' : 'q4';
 }
@@ -87,14 +114,19 @@ async function loadGenerator(onProgress) {
 
   if (!generatorPromise) {
     generatorPromise = (async () => {
+      activeModel = selectModel();
+      const compactText = activeModel.profile === 'apple-mobile-compact'
+        ? 'Kompaktes iPhone-/iPad-Sprachmodell wird vorbereitet …'
+        : 'Sprachmodell wird vorbereitet …';
+
       setModelState({ status: 'loading', percent: 3, text: 'KI-Bibliothek wird geladen …', error: null }, onProgress);
       const { pipeline, env } = await import(TRANSFORMERS_URL);
       configureRuntimeForPlatform(env);
 
       const dtype = await chooseDtype();
-      setModelState({ status: 'loading', percent: 8, text: 'Sprachmodell wird vorbereitet …' }, onProgress);
+      setModelState({ status: 'loading', percent: 8, text: compactText }, onProgress);
 
-      const pipe = await pipeline('text-generation', MODEL_ID, {
+      const pipe = await pipeline('text-generation', activeModel.id, {
         device: 'webgpu',
         dtype,
         progress_callback: (event) => {
@@ -121,7 +153,14 @@ async function loadGenerator(onProgress) {
       });
 
       generatorInstance = pipe;
-      modelInfo = { id: MODEL_ID, dtype, device: 'webgpu', safari26Workaround: isSafari26Plus() };
+      modelInfo = {
+        id: activeModel.id,
+        label: activeModel.label,
+        profile: activeModel.profile,
+        dtype,
+        device: 'webgpu',
+        safari26Workaround: isSafari26Plus(),
+      };
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
       return pipe;
     })().catch((error) => {
