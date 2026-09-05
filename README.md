@@ -44,27 +44,44 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-## Neue Generierungsarchitektur: Quellen statt freier Fantasie
+## Neue Generierungsarchitektur: einzeln belegte Mikrosätze
 
-Die bisherigen iPhone-Tests haben gezeigt, dass ein 1B-Modell bei freier deutscher HEB-Generierung sprachlich und fachlich unzuverlässig sein kann. Deshalb erzeugt HEB-Assist einen vollständigen HEB-Bereich nicht mehr direkt aus dem gesamten Falltext.
+Die bisherigen iPhone-Tests haben gezeigt, dass ein 1B-Modell bei freier deutscher HEB-Generierung sprachlich und fachlich unzuverlässig sein kann. Deshalb darf das Modell nicht mehr frei aus dem gesamten Falltext schreiben.
 
-Der aktuelle Ablauf ist zweistufig und quellengebunden:
+Der aktuelle Ablauf ist quellengebunden:
 
-1. Die Eingabe wird lokal in Originalaussagen mit IDs wie `S1`, `S2`, `S3` zerlegt.
+1. Die Eingabe wird lokal in unveränderte Originalaussagen mit IDs wie `S1`, `S2`, `S3` zerlegt.
 2. Das vollständig gestartete lokale Sprachmodell ordnet ausschließlich diese vorhandenen Quellen-IDs den offiziellen HEB-Unterpunkten zu.
-3. Die Anwendung akzeptiert nur IDs, die tatsächlich in der Eingabe existieren.
-4. Jeder HEB-Unterpunkt wird anschließend vom selben lokalen Sprachmodell ausschließlich aus den dafür freigegebenen Originalbelegen formuliert.
-5. Eine zusätzliche lokale Qualitätsprüfung kontrolliert unter anderem:
-   - nicht belegte Ursachen
-   - wertende Formulierungen
-   - Fantasiewörter und degenerierte Bindestrichketten
-   - auffällige Zeichensetzung / Wiederholungsmuster
-   - neu eingeführte Zahlen
-   - zu viele nicht durch die Originalbelege verankerte Inhaltswörter
-   - unvollständige oder zu lange Sätze
-6. Fällt die Ausgabe durch die Prüfung, wird sie verworfen. Es erscheint **kein** regel- oder regexbasierter Ersatztext als vermeintliche KI-Ausgabe.
+3. Nicht existierende oder vom Modell erfundene IDs werden verworfen.
+4. Für die eigentliche Formulierung erhält das Sprachmodell **immer nur genau einen freigegebenen Originalbeleg**.
+5. Aus diesem einen Beleg darf es genau einen kurzen HEB-Satz formulieren.
+6. Dieser Mikrosatz wird lokal gegen genau seinen Originalbeleg geprüft. Dadurch können Inhalte verschiedener Aussagen nicht unbemerkt miteinander vermischt werden.
+7. Nur bestandene Mikrosätze werden anschließend zu dem jeweiligen HEB-Unterpunkt zusammengesetzt.
+8. Fällt ein Mikrosatz durch die Prüfung, wird der gesamte Entwurf verworfen. Es erscheint **kein** regel- oder regexbasierter Ersatztext als vermeintliche KI-Ausgabe.
+
+Die Quellenprüfung kontrolliert unter anderem:
+
+- nicht belegte Ursachen
+- wertende Formulierungen
+- neue Zahlen
+- Fantasiewörter und degenerierte Bindestrichketten
+- auffällige Zeichensetzung
+- nicht durch den konkreten Einzelbeleg verankerte Inhaltswörter
+- unvollständige oder zu lange Sätze
 
 Zusätzlich gelten fachliche Sperren: Eine bloße Situationsbeschreibung wird nicht automatisch zu einem Ziel. Bei HEB B/C darf ohne tatsächlichen zeitlichen Vergleich keine Entwicklung erfunden werden.
+
+## Automatische Regressionstests
+
+Vor jedem GitHub-Pages-Deploy werden JavaScript-Syntaxprüfungen und synthetische Regressionstests ausgeführt. Die Tests decken unter anderem genau die bisher beobachteten Fehler ab:
+
+- erfundene Ursache wie „Ermüdung“
+- Verschiebung von Unterstützung beim Beginn hin zu Unterstützung bei der Durchführung
+- Vermischung verschiedener Originalaussagen
+- wertende Formulierungen wie „gute Idee“
+- degenerierte Zeichensetzung und kaputte KI-Ausgaben
+
+Ein fehlgeschlagener Test verhindert den Deploy.
 
 ## Externe Netzwerkzugriffe
 
@@ -84,7 +101,7 @@ Die bisherigen Tests haben mehrere Grenzen sichtbar gemacht:
 - sehr kleine Modelle waren stabiler, lieferten aber fachlich unbrauchbare deutsche Texte
 - Llama 3.2 1B läuft auf dem Gerät stabiler als größere getestete Varianten, erzeugte im freien Generierungsmodus jedoch weiterhin erfundene oder sprachlich fehlerhafte Inhalte
 
-Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf noch mehr Prompt-Tuning, sondern auf der quellengebundenen Zwei-Stufen-Architektur mit harter Verifikation.
+Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf weiterem Prompt-Tuning, sondern auf harter Quellenbindung und überprüfbarer Mikro-Generierung.
 
 ## Aktuell implementiert
 
@@ -100,7 +117,7 @@ Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf noch mehr Prompt-Tuning, 
 - automatische PWA-Update-Erkennung und sichere Übernahme neuer Versionen
 - PWA-Manifest und Offline-App-Shell
 - Kopierfunktion
-- quellengebundene KI-Analyse und lokale Qualitätsprüfung
+- quellengebundene KI-Analyse, Mikrosatz-Generierung und lokale Quellenprüfung
 
 ## Entwicklungsworkflow
 
