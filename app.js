@@ -32,6 +32,10 @@ const INPUT_HINTS = {
   C: 'Beschreibe kurz: Was wurde gemacht? Wie hat sich die Person entwickelt? Welcher Hilfebedarf besteht noch? Was ist nach Abschluss vorgesehen und – falls bekannt – durch wen?',
 };
 
+let serviceWorkerRegistration = null;
+let pendingAppReload = false;
+let updateReloadStarted = false;
+
 function updateFormHint() {
   formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
 }
@@ -99,6 +103,59 @@ function validateInput() {
   return value;
 }
 
+function hasActiveWork() {
+  return notes.value.trim().length > 0 || !copyButton.disabled;
+}
+
+function maybeReloadForUpdate() {
+  if (!pendingAppReload || updateReloadStarted || hasActiveWork()) return;
+  updateReloadStarted = true;
+  window.location.reload();
+}
+
+async function checkForAppUpdate() {
+  if (!serviceWorkerRegistration || !navigator.onLine) return;
+  try {
+    await serviceWorkerRegistration.update();
+    if (serviceWorkerRegistration.waiting) {
+      serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+  } catch (error) {
+    console.warn('Automatic app update check failed:', error?.message || error);
+  }
+}
+
+async function setupAutomaticAppUpdates() {
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updateReloadStarted) return;
+    pendingAppReload = true;
+    maybeReloadForUpdate();
+  });
+
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', {
+      updateViaCache: 'none',
+    });
+
+    serviceWorkerRegistration.addEventListener('updatefound', () => {
+      const installingWorker = serviceWorkerRegistration.installing;
+      if (!installingWorker) return;
+
+      installingWorker.addEventListener('statechange', () => {
+        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          installingWorker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+    });
+
+    await checkForAppUpdate();
+  } catch (error) {
+    console.warn('Service Worker registration failed:', error?.message || error);
+  }
+}
+
 reportType.addEventListener('change', () => {
   updateFormHint();
   setResult('Noch keine Formulierung erstellt.', 'empty');
@@ -113,6 +170,7 @@ notes.addEventListener('input', () => {
       privacyResult.textContent = '';
     }
   }
+  maybeReloadForUpdate();
 });
 
 clearButton.addEventListener('click', () => {
@@ -120,7 +178,8 @@ clearButton.addEventListener('click', () => {
   charCount.textContent = '0 / 3500';
   privacyResult.hidden = true;
   setResult('Noch keine Formulierung erstellt.', 'empty');
-  notes.focus();
+  maybeReloadForUpdate();
+  if (!pendingAppReload) notes.focus();
 });
 
 generateButton.addEventListener('click', async () => {
@@ -182,6 +241,22 @@ detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
 
+window.addEventListener('focus', () => {
+  checkForAppUpdate();
+  maybeReloadForUpdate();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    checkForAppUpdate();
+    maybeReloadForUpdate();
+  }
+});
+
+window.setInterval(() => {
+  if (!document.hidden) checkForAppUpdate();
+}, 5 * 60 * 1000);
+
 updateFormHint();
 updateEngineStatus({ status: 'idle', percent: 0 });
 
@@ -196,10 +271,4 @@ if (!capability.supported) {
   }, 500);
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((error) => {
-      console.warn('Service Worker registration failed:', error?.message || error);
-    });
-  });
-}
+window.addEventListener('load', setupAutomaticAppUpdates);
