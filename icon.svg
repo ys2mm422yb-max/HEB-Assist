@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HEB Assist">
+  <rect width="512" height="512" rx="112" fill="#0f766e"/>
+  <path d="M132 132h58v98h132v-98h58v248h-58V282H190v98h-58V132Z" fill="#fff"/>
+  <circle cx="378" cy="378" r="42" fill="#dff3ef"/>
+  <path d="m359 378 13 13 27-30" fill="none" stroke="#0f766e" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
