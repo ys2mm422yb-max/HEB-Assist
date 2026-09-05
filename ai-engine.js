@@ -1,34 +1,26 @@
-import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
+import { HEB_FORM_CONFIG } from './heb-knowledge.js';
 
-// Low-memory multilingual model for iOS/Safari. HEB Assist is a social-
-// psychiatric documentation aid, not a nursing documentation generator.
+// Lokales, speicherschonendes Sprachmodell für iOS/Safari.
 const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.82';
 const MODEL_KEY = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
 const MODEL_LABEL = 'Llama 3.2 1B Instruct';
-const MODEL_PROFILE = 'webllm-llama32-1b-q4f16-ctx1024';
-const CONTEXT_WINDOW_SIZE = 1024;
-
+const MODEL_PROFILE = 'webllm-llama32-1b-q4f16-ctx2048';
+// 1024 Tokens waren für Systemregeln + Falltext + Ausgabe zu knapp. 2048 bleibt
+// deutlich unter dem vom Modell unterstützten 4096er Kontext und reduziert das
+// Risiko von Kontextfehlern bei realistischen HEB-Eingaben.
+const CONTEXT_WINDOW_SIZE = 2048;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
 
-const CORE_RULES = `Du bist HEB Assist. Du formulierst professionelle HEB-Texte für die sozialpsychiatrische Eingliederungshilfe.
-
-Verbindliche Regeln:
-- Nutze ausschließlich Angaben aus der Fallbeschreibung. Nichts erfinden, vermuten oder fachlich dazudichten.
-- HEB Assist ist kein Pflegebericht. Verwende pflegerische oder medizinische Begriffe nur, wenn sie in der Fallbeschreibung tatsächlich vorkommen und für den gewählten HEB-Bereich relevant sind.
-- Im Bereich Selbstversorgung / Wohnen können z. B. Haushaltsführung, Einkaufen, Finanzen, Wohnraum, Alltagsorganisation und eigenständige Lebensführung relevant sein. Körperpflege darf niemals automatisch angenommen werden.
-- Alltagsformulierungen sind verwertbare Angaben; sie müssen nicht ausdrücklich als Ressource oder Hilfebedarf bezeichnet sein.
-- Keine Diagnosen, Ursachen, Symptome, Risiken, Fähigkeiten, Entwicklungen, Ziele, Maßnahmen, Hilfebedarfe oder Anbieter ergänzen, die nicht aus der Eingabe hervorgehen.
-- Ziele nur formulieren, wenn aus der Eingabe tatsächlich eine Zielrichtung, ein Wunsch oder eine zukünftige Absicht hervorgeht. Eine bloße Problembeschreibung ist noch kein Ziel.
-- Maßnahmen nur formulieren, wenn eine konkrete Unterstützungsform beschrieben oder ausdrücklich vorgesehen ist.
-- Schreibe korrektes, natürliches, professionelles Deutsch: sachlich, wertschätzend, ressourcenorientiert und personenzentriert.
-- Verwende „die Person“ oder „die leistungsberechtigte Person“ und keine Namen.
-- Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
-- Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
-- Keine Überschriften, Listen, Nummerierungen, Markdown, Fantasiewörter, künstlichen Fachbegriffe oder Meta-Kommentare in der eigentlichen Antwort.
-- Wiederhole die Fallbeschreibung nicht vollständig. Verdichte nur die für den angeforderten Unterpunkt relevanten Informationen.
-- Antworte nur mit dem fertigen Fließtext für genau den angeforderten HEB-Unterpunkt.
-- Jeder ausgegebene Text muss mit einem vollständigen Satz enden. Niemals mitten im Wort oder Satz abbrechen.
-- Wenn die Informationen für diesen Unterpunkt wirklich fehlen, antworte exakt: „${MISSING_TEXT}“`;
+const CORE_RULES = `Du bist HEB Assist für die sozialpsychiatrische Eingliederungshilfe.
+Schreibe professionelles, natürliches, sachliches und ressourcenorientiertes Deutsch.
+Nutze ausschließlich Angaben aus der Fallbeschreibung. Erfinde keine Diagnosen, Ursachen, Symptome, Ressourcen, Fähigkeiten, Entwicklungen, Ziele, Maßnahmen, Hilfebedarfe oder Anbieter.
+Pflege- oder medizinische Inhalte nur verwenden, wenn sie in der Eingabe tatsächlich genannt und für den gewählten HEB-Bereich relevant sind.
+Alltagsformulierungen dürfen fachlich verdichtet werden. Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
+Keine formale Hilfebedarfsstufe ergänzen, wenn sie nicht ausdrücklich genannt ist.
+Keine Überschriften, Listen, Nummerierungen, Markdown, Fantasiewörter oder Meta-Kommentare ausgeben.
+Wiederhole die Fallbeschreibung nicht vollständig. Gib nur den fertigen Fließtext des angeforderten Unterpunkts aus.
+Ziele nur bei tatsächlich genannter Zielrichtung, Wunsch oder Zukunftsabsicht formulieren. Maßnahmen nur bei beschriebener oder ausdrücklich geplanter Unterstützung.
+Fehlen die nötigen Angaben, antworte exakt: „${MISSING_TEXT}“`;
 
 const SECTION_MODES = {
   A: [
@@ -53,9 +45,7 @@ const SECTION_MODES = {
   ],
 };
 
-// Zielwerte orientieren sich an den unterschiedlich großen Textfeldern der
-// HEB-Bögen. Die KI soll verdichten; die technische Token-Grenze liegt bewusst
-// höher, damit der letzte Satz vollständig beendet werden kann.
+// Kompakte Zielgrößen passend zu den unterschiedlich großen Feldern der HEB-Bögen.
 const SECTION_LENGTHS = {
   A: {
     current: { maxWords: 46, sentences: '2 bis 3' },
@@ -80,15 +70,15 @@ const SECTION_LENGTHS = {
 };
 
 const GUIDANCE = {
-  current: 'Verdichte die aktuelle Alltagssituation. Stelle die wichtigsten Ressourcen und Schwierigkeiten nachvollziehbar gegenüber. Nenne nur Unterstützung, die zum Verständnis der Situation nötig ist.',
-  support: 'Beschreibe knapp, wobei Unterstützung nötig ist und was selbstständig gelingt. Keine Fallbeschreibung wiederholen und keine Hilfebedarfsstufe wählen.',
-  goals: `Formuliere nur eine tatsächlich genannte oder eindeutig als Zukunftswunsch beschriebene Zielrichtung. Wenn kein Ziel oder Wunsch genannt ist, antworte exakt: „${MISSING_TEXT}“`,
-  measures: `Nenne ausschließlich bereits beschriebene oder ausdrücklich geplante Unterstützungsformen. Wenn keine konkrete Unterstützungsform erkennbar ist, antworte exakt: „${MISSING_TEXT}“`,
-  reflection: `Reflektiere nur tatsächlich genannte durchgeführte Maßnahmen und deren beschriebenen Verlauf oder Wirkung. Fehlen Verlauf oder Maßnahmen, antworte exakt: „${MISSING_TEXT}“`,
-  development: `Beschreibe nur ausdrücklich erkennbare Entwicklung, Stabilität oder Verschlechterung im Zeitraum. Ohne zeitlichen Vergleich antworte exakt: „${MISSING_TEXT}“`,
-  remainingSupport: 'Beschreibe ausschließlich den ausdrücklich noch bestehenden Unterstützungsbedarf. Keine Hilfebedarfsstufe ergänzen.',
-  furtherMeasures: `Nenne nur ausdrücklich vorgesehene weitere Maßnahmen. Fehlen diese, antworte exakt: „${MISSING_TEXT}“`,
-  provider: `Nenne nur den ausdrücklich genannten Erbringer. Fehlt diese Information, antworte exakt: „${MISSING_TEXT}“`,
+  current: 'Verdichte aktuelle Situation, Schwierigkeiten und vorhandene Ressourcen. Nur relevante Unterstützung erwähnen.',
+  support: 'Beschreibe knapp, was selbstständig gelingt und wobei konkret Unterstützung nötig ist. Keine Hilfebedarfsstufe wählen.',
+  goals: `Nur eine ausdrücklich genannte Zielrichtung, einen Wunsch oder eine Zukunftsabsicht formulieren. Fehlt dies: „${MISSING_TEXT}“`,
+  measures: `Nur bereits beschriebene oder ausdrücklich geplante Unterstützungsformen nennen. Fehlen diese: „${MISSING_TEXT}“`,
+  reflection: `Nur tatsächlich durchgeführte Maßnahmen und deren beschriebenen Verlauf oder Wirkung reflektieren. Fehlen Angaben: „${MISSING_TEXT}“`,
+  development: `Nur ausdrücklich erkennbare Entwicklung, Stabilität oder Verschlechterung beschreiben. Ohne zeitlichen Vergleich: „${MISSING_TEXT}“`,
+  remainingSupport: 'Nur den ausdrücklich noch bestehenden Unterstützungsbedarf beschreiben. Keine Hilfebedarfsstufe ergänzen.',
+  furtherMeasures: `Nur ausdrücklich vorgesehene weitere Maßnahmen nennen. Fehlen diese: „${MISSING_TEXT}“`,
+  provider: `Nur den ausdrücklich genannten Erbringer nennen. Fehlt er: „${MISSING_TEXT}“`,
 };
 
 let enginePromise = null;
@@ -132,7 +122,6 @@ function germanLoadingText(report, fromCache, percent) {
       ? 'Gespeichertes Sprachmodell wird auf dem Gerät gestartet …'
       : 'Gespeichertes Sprachmodell wird aus dem Gerätespeicher geladen …';
   }
-
   if (isStarting) return 'Sprachmodell wird auf dem Gerät gestartet …';
   if (/cache|caching|store|saving/.test(rawText)) return 'Sprachmodell wird lokal auf dem Gerät gespeichert …';
   return 'Sprachmodell wird heruntergeladen und lokal gespeichert …';
@@ -253,18 +242,6 @@ function getLengthProfile(formType, sectionMode) {
   return SECTION_LENGTHS[formType]?.[sectionMode] || { maxWords: 36, sentences: '1 bis 2' };
 }
 
-function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel, strictRetry = false }) {
-  const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
-  const instruction = getOutputInstruction(formType, sectionMode);
-  const guidance = GUIDANCE[sectionMode] || '';
-  const length = getLengthProfile(formType, sectionMode);
-  const retryHint = strictRetry
-    ? '\nDie vorige Antwort war unvollständig, zu lang oder sprachlich unbrauchbar. Formuliere deutlich kompakter und beende jeden Satz vollständig.'
-    : '';
-
-  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe: ${instruction}\n${guidance}\n\nFallbeschreibung:\n${notes}\n\nFormuliere ausschließlich den Inhalt dieses Unterpunkts. Verdichte statt zu wiederholen. Umfang: ${length.sentences} vollständige Sätze, höchstens ${length.maxWords} Wörter. Der letzte Satz muss vollständig mit Satzzeichen enden. Keine Überschrift, keine Liste, keine Nummerierung und kein Markdown.${retryHint}`;
-}
-
 function normalizeOutput(text) {
   return String(text || '')
     .replace(/<\|im_start\|>|<\|im_end\|>|<bos>|<eos>/gi, '')
@@ -277,12 +254,6 @@ function wordCount(text) {
   return (normalizeOutput(text).match(/\S+/g) || []).length;
 }
 
-function endsWithCompleteSentence(text) {
-  const cleaned = normalizeOutput(text);
-  if (!cleaned) return false;
-  return /[.!?…][”"']?$/.test(cleaned);
-}
-
 function isMissingOutput(text) {
   const cleaned = normalizeOutput(text).replace(/[.!]+$/g, '').trim().toLowerCase();
   return [
@@ -292,12 +263,25 @@ function isMissingOutput(text) {
   ].includes(cleaned);
 }
 
+function endsWithCompleteSentence(text) {
+  const cleaned = normalizeOutput(text);
+  return Boolean(cleaned) && /[.!?…][”"']?$/.test(cleaned);
+}
+
 function hasSupportEvidence(notes) {
   return /\b(benötig\w*|unterstütz\w*|erinner\w*|impuls\w*|gemeinsam|begleit\w*|anleit\w*|hilfe\w*|hilfestell\w*|struktur\w*|angebot\w*)\b/i.test(notes);
 }
 
 function hasGoalEvidence(notes) {
   return /\b(ziel\w*|soll\w*|möchte\w*|wunsch\w*|angestrebt\w*|erhalten\w*|stabilisier\w*|weiterentwick\w*|verbesser\w*|förder\w*|künftig\w*|zukünftig\w*)\b/i.test(notes);
+}
+
+function sectionCanBeResolvedWithoutGeneration({ notes, formType, sectionMode }) {
+  const value = String(notes || '').trim();
+  if (!value) return MISSING_TEXT;
+  // Bei HEB A darf aus einer bloßen Situationsbeschreibung kein Ziel erfunden werden.
+  if (formType === 'A' && sectionMode === 'goals' && !hasGoalEvidence(value)) return MISSING_TEXT;
+  return null;
 }
 
 function shouldContainContent({ notes, formType, sectionMode }) {
@@ -309,13 +293,6 @@ function shouldContainContent({ notes, formType, sectionMode }) {
     if (sectionMode === 'goals') return hasGoalEvidence(value);
   }
   if (sectionMode === 'remainingSupport') return hasSupportEvidence(value);
-  return false;
-}
-
-function mustBeMissing({ notes, formType, sectionMode }) {
-  const value = String(notes || '').trim();
-  if (!value) return true;
-  if (formType === 'A' && sectionMode === 'goals') return !hasGoalEvidence(value);
   return false;
 }
 
@@ -356,32 +333,45 @@ function compactToProfile(text, context) {
   const chosen = [];
   for (const sentence of sentences) {
     const candidate = [...chosen, sentence].join(' ');
-    if (wordCount(candidate) <= maxWords + 6) {
-      chosen.push(sentence);
-      continue;
-    }
-    break;
+    if (wordCount(candidate) <= maxWords + 6) chosen.push(sentence);
+    else break;
   }
-
-  if (chosen.length) return chosen.join(' ').trim();
-  return cleaned;
+  return chosen.length ? chosen.join(' ').trim() : cleaned;
 }
 
 function isSectionInvalid(text, context) {
   const cleaned = normalizeOutput(text);
-  const length = getLengthProfile(context.formType, context.sectionMode);
+  const { maxWords } = getLengthProfile(context.formType, context.sectionMode);
   if (isDegenerateOutput(cleaned)) return true;
-  if (mustBeMissing(context) && !isMissingOutput(cleaned)) return true;
   if (!isMissingOutput(cleaned) && !endsWithCompleteSentence(cleaned)) return true;
-  if (!isMissingOutput(cleaned) && wordCount(cleaned) > length.maxWords + 8) return true;
+  if (!isMissingOutput(cleaned) && wordCount(cleaned) > maxWords + 8) return true;
   if (shouldContainContent(context) && isMissingOutput(cleaned)) return true;
   return false;
+}
+
+function buildSectionPrompt(context, compact = false) {
+  const form = HEB_FORM_CONFIG[context.formType] || HEB_FORM_CONFIG.A;
+  const length = getLengthProfile(context.formType, context.sectionMode);
+  const guidance = GUIDANCE[context.sectionMode] || '';
+
+  if (compact) {
+    return `HEB ${context.formType}, Bereich: ${context.area}\nUnterpunkt: ${context.sectionLabel}\n${guidance}\nFallbeschreibung: ${context.notes}\nSchreibe nur ${length.sentences} vollständige Sätze, höchstens ${length.maxWords} Wörter. Nur belegbare Angaben; keine Liste oder Überschrift.`;
+  }
+
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${context.area}\nUnterpunkt: ${context.sectionLabel}\n\n${guidance}\n\nFallbeschreibung:\n${context.notes}\n\nFormuliere ausschließlich diesen Unterpunkt als ${length.sentences} vollständige Sätze mit höchstens ${length.maxWords} Wörtern. Verdichte statt zu wiederholen. Keine Überschrift, Liste, Nummerierung oder Markdown.`;
 }
 
 function makeQualityError() {
   const error = new Error('Die KI-Ausgabe hat die Qualitätsprüfung nicht bestanden und wurde verworfen.');
   error.code = 'QUALITY_REJECTED';
   return error;
+}
+
+function makeRuntimeError(error) {
+  const message = error?.message || String(error) || 'Unbekannter Laufzeitfehler';
+  const wrapped = new Error(`Technischer Fehler bei der lokalen KI: ${message}`);
+  wrapped.code = 'GENERATION_RUNTIME_ERROR';
+  return wrapped;
 }
 
 async function runSection(engine, prompt, strictRetry = false) {
@@ -393,28 +383,41 @@ async function runSection(engine, prompt, strictRetry = false) {
     ],
     temperature: strictRetry ? 0 : 0.05,
     top_p: 0.9,
-    repetition_penalty: strictRetry ? 1.16 : 1.08,
-    max_tokens: strictRetry ? 152 : 168,
+    repetition_penalty: strictRetry ? 1.14 : 1.08,
+    // Für die kompakten HEB-Felder reichen diese Budgets; kleineres Decode-Budget
+    // schont iOS-Speicher und lässt mehr Platz im Kontext für den Falltext.
+    max_tokens: strictRetry ? 112 : 128,
   });
-
-  return {
-    text: normalizeOutput(response?.choices?.[0]?.message?.content || ''),
-    finishReason: response?.choices?.[0]?.finish_reason || null,
-  };
+  return normalizeOutput(response?.choices?.[0]?.message?.content || '');
 }
 
-async function generateSection(engine, baseContext) {
-  let prompt = buildSectionPrompt({ ...baseContext, strictRetry: false });
-  let result = await runSection(engine, prompt, false);
-  let text = compactToProfile(result.text, baseContext);
-  if (!isSectionInvalid(text, baseContext)) return text;
+async function generateSection(engine, context) {
+  const resolved = sectionCanBeResolvedWithoutGeneration(context);
+  if (resolved) return resolved;
 
-  prompt = buildSectionPrompt({ ...baseContext, strictRetry: true });
-  result = await runSection(engine, prompt, true);
-  text = compactToProfile(result.text, baseContext);
-  if (!isSectionInvalid(text, baseContext)) return text;
+  let firstText = '';
+  try {
+    firstText = compactToProfile(
+      await runSection(engine, buildSectionPrompt(context, false), false),
+      context,
+    );
+    if (!isSectionInvalid(firstText, context)) return firstText;
+  } catch {
+    // Ein technischer Fehler beim ersten Versuch wird mit einem deutlich
+    // kompakteren Prompt einmal innerhalb desselben echten lokalen Modells erneut versucht.
+  }
 
-  throw makeQualityError();
+  try {
+    const retryText = compactToProfile(
+      await runSection(engine, buildSectionPrompt(context, true), true),
+      context,
+    );
+    if (!isSectionInvalid(retryText, context)) return retryText;
+    throw makeQualityError();
+  } catch (error) {
+    if (error?.code === 'QUALITY_REJECTED') throw error;
+    throw makeRuntimeError(error);
+  }
 }
 
 export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
@@ -432,14 +435,19 @@ export async function generateHebText({ notes, area, formType, mode = 'complete'
         error: null,
       }, onProgress);
 
-      const sectionText = await generateSection(engine, {
-        notes,
-        area,
-        formType,
-        sectionMode,
-        sectionLabel,
-      });
-      outputs.push(`${sectionLabel}\n${sectionText}`);
+      try {
+        const sectionText = await generateSection(engine, {
+          notes,
+          area,
+          formType,
+          sectionMode,
+          sectionLabel,
+        });
+        outputs.push(`${sectionLabel}\n${sectionText}`);
+      } catch (error) {
+        error.sectionLabel = sectionLabel;
+        throw error;
+      }
     }
   } catch (error) {
     if (engineInstance) {
