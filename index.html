@@ -18,18 +18,14 @@
         <h1>HEB Assist</h1>
         <p>Fachliche Formulierungen. Lokal verarbeitet.</p>
       </div>
-      <div id="engineBadge" class="status-badge loading" aria-live="polite">KI wird vorbereitet …</div>
+      <div aria-label="Status der lokalen KI" style="min-width:132px;max-width:180px;display:flex;flex-direction:column;align-items:stretch;">
+        <div id="engineBadge" class="status-badge loading" aria-live="polite" style="text-align:center;">KI wird vorbereitet …</div>
+        <div id="engineProgressTrack" class="progress-track ai-progress-track" aria-hidden="true" style="width:100%;height:4px;margin:6px 0 0;">
+          <div id="engineProgressBar" class="progress-bar"></div>
+        </div>
+        <span id="engineStatusText" hidden>Das Sprachmodell wird automatisch im Hintergrund vorbereitet. Die App ist währenddessen bereits nutzbar.</span>
+      </div>
     </header>
-
-    <section id="aiStatusStrip" class="ai-status-strip" aria-label="Status der lokalen KI">
-      <div class="ai-status-copy">
-        <strong>Lokales Sprachmodell</strong>
-        <span id="engineStatusText">Wird automatisch im Hintergrund vorbereitet. Die App ist währenddessen bereits nutzbar.</span>
-      </div>
-      <div id="engineProgressTrack" class="progress-track ai-progress-track" aria-hidden="true">
-        <div id="engineProgressBar" class="progress-bar"></div>
-      </div>
-    </section>
 
     <section class="privacy-strip" aria-label="Datenschutzhinweis">
       <strong>Keine Namen oder identifizierenden Angaben eingeben.</strong>
@@ -94,7 +90,7 @@
     <div class="dialog-body">
       <h2>Technik & Datenschutz</h2>
       <p>HEB Assist startet das stärkere lokale Sprachmodell automatisch im Hintergrund. Solange es noch lädt oder auf dem Gerät nicht gestartet werden kann, bleibt die App über den schnellen lokalen Modus sofort nutzbar.</p>
-      <p>Sobald oben „KI ist bereit ✓“ angezeigt wird, werden neue Entwürfe mit dem stärkeren lokalen Sprachmodell erstellt. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
+      <p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, werden neue Entwürfe mit dem stärkeren lokalen Sprachmodell erstellt. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
       <p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p>
       <button id="closeDialog" class="primary-button" type="button">Schließen</button>
     </div>
