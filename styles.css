@@ -60,6 +60,19 @@ button { cursor: pointer; }
   border-radius: 999px;
   font-weight: 700;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+.status-badge.loading {
+  border-color: #bed4e7;
+  color: #315b78;
+  background: #f2f7fb;
+}
+
+.status-badge.ready {
+  border-color: #9fd0c8;
+  color: #0b5f59;
+  background: #ecf8f5;
 }
 
 .status-badge.warning {
@@ -67,6 +80,27 @@ button { cursor: pointer; }
   color: #8a5300;
   background: #fff8e8;
 }
+
+.ai-status-strip {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #d3dfdc;
+  border-radius: 14px;
+  background: rgba(255,255,255,.74);
+}
+
+.ai-status-copy {
+  display: flex;
+  gap: 6px 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  color: #53615d;
+  font-size: 13px;
+}
+
+.ai-status-copy strong { color: #263633; }
+.ai-progress-track { margin: 9px 0 0; }
+.ai-progress-track[hidden] { display: none; }
 
 .privacy-strip {
   display: flex;
@@ -317,6 +351,7 @@ dialog::backdrop { background: rgba(15, 30, 27, .46); backdrop-filter: blur(3px)
 @media (max-width: 500px) {
   .topbar { gap: 10px; }
   .status-badge { padding: 7px 9px; font-size: 11px; }
+  .ai-status-strip { padding: 10px 11px; }
   .privacy-strip { padding: 11px 12px; }
   .panel, .input-panel, .result-panel { border-radius: 16px; }
   .input-panel, .result-panel { padding: 16px; }
