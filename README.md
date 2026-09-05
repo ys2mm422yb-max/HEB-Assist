@@ -11,35 +11,49 @@ Mitarbeitende beschreiben eine Situation in normaler Alltagssprache. HEB-Assist 
 - **Eigenständiges Projekt:** keine technische, inhaltliche oder datenbezogene Verbindung zu anderen Projekten.
 - **Mobile first:** iPhone, Android und Desktop werden als gleichwertige Zielplattformen behandelt.
 - **Datensparsamkeit:** Version 1 benötigt keine zentrale Datenbank und keine Benutzerkonten.
-- **Keine Fallablage:** HEB-Eingaben und KI-Ausgaben werden standardmäßig nicht zentral gespeichert.
-- **Lokale KI:** Inferenz erfolgt im Browser auf dem Endgerät.
-- **Identifizierende Daten blockieren:** Typische direkte Identifikatoren werden vor der KI-Verarbeitung lokal geprüft und bei Treffern blockiert.
-- **Keine Halluzinationen:** Die KI darf keine Diagnosen, Fähigkeiten, Einschränkungen, Ereignisse, Ziele oder Unterstützungsbedarfe erfinden.
+- **Keine Fallablage:** HEB-Eingaben und Ausgaben werden standardmäßig nicht zentral gespeichert.
+- **Lokale Verarbeitung:** Der normale Schnellmodus verarbeitet die Eingabe vollständig im Browser auf dem Endgerät.
+- **Identifizierende Daten blockieren:** Typische direkte Identifikatoren werden vor der Verarbeitung lokal geprüft und bei Treffern blockiert.
+- **Keine erfundenen Tatsachen:** Diagnosen, Fähigkeiten, Einschränkungen, Ereignisse, Entwicklungen, Ziele oder Unterstützungsbedarfe dürfen nicht frei ergänzt werden.
 - **Fachliche Trennung:** Beobachtung, Selbstaussage und fachliche Einschätzung werden nicht vermischt.
 - **Menschliche Verantwortung:** Ausgaben sind Formulierungsvorschläge und müssen vor Übernahme fachlich geprüft werden.
+
+## Fachliche Grundlage
+
+HEB-Assist orientiert sich an den offiziellen bayerischen HEB-Bögen für Menschen mit einer wesentlichen seelischen Behinderung:
+
+- HEB A – Vorläufige Hilfeplanung
+- HEB B – Entwicklungsbericht
+- HEB C – Abschlussbericht
+
+Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwendet. Details stehen in `HEB_REFERENCE.md`.
 
 ## Technik – aktueller Prototyp
 
 - statische HTML/CSS/JavaScript-Web-App ohne Backend
 - Progressive Web App mit Service Worker und App-Shell-Cache
-- lokale Browser-Inferenz mit Transformers.js 4.2.0 und WebGPU
-- Modellkandidat: `onnx-community/Qwen2.5-0.5B-Instruct`
-- bevorzugt 4-Bit-Quantisierung (`q4f16`, sofern vom Gerät unterstützt, sonst `q4`)
+- normaler Schnellmodus ohne großes Modell und ohne KI-Server
+- lokaler Datenschutzfilter vor jeder Formulierung
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-Beim ersten KI-Start werden Transformers.js und die Modell-Dateien aus dem Internet geladen. Die eigentliche Fallbeschreibung wird nicht an einen KI-Inferenzserver gesendet; die Generierung läuft auf dem Endgerät.
+### Entscheidung nach iPhone-Gerätetest
+
+Der erste WebGPU-Versuch mit `onnx-community/Qwen2.5-0.5B-Instruct` war auf dem getesteten iPhone nicht praxistauglich: Der mehrere hundert MB große Modelldownload dauerte mehrere Minuten und der Start brach anschließend ab. Deshalb ist ein großes lokales Sprachmodell **nicht mehr Voraussetzung für die normale Nutzung**.
+
+Der aktuelle Schnellmodus erzeugt den vollständigen, zum gewählten HEB-Bogen passenden Entwurf sofort lokal. Ein stärkeres lokales Sprachmodell bleibt ein separates Forschungs-/Qualitätsthema und darf die mobile Grundfunktion nicht blockieren.
 
 ## Aktuell implementiert
 
 - mobile Oberfläche für iPhone, Android und Desktop
-- HEB-Bereichsauswahl
-- Gesamtformulierung, Ressourcen, Unterstützungsbedarf sowie Ziel + Maßnahmen
+- Auswahl HEB A / B / C
+- die fünf offiziellen HEB-Bereiche
+- ein einziges Eingabefeld in Alltagssprache
+- ein einziger Button für den vollständigen HEB-Entwurf
+- automatische Struktur passend zu A, B oder C
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
-- lokales HEB-Regelwerk und erste fachliche Few-Shot-Beispiele
-- lokale WebGPU-KI
 - PWA-Manifest und Offline-App-Shell
-- Kopierfunktion und verständliche Fehlerzustände
+- Kopierfunktion
 
 ## Entwicklungsworkflow
 
@@ -49,6 +63,4 @@ Beim ersten KI-Start werden Transformers.js und die Modell-Dateien aus dem Inter
 
 Bootstrap/Prototyp. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.**
 
-Der nächste harte Qualitätsschritt ist ein echter Gerätetest auf iPhone und Android mit vollständig fiktiven Testfällen. Erst danach wird entschieden, ob das lokale Modell fachlich stark genug ist oder ausgetauscht werden muss.
-
-Netlify ist für den Testbetrieb auf den Feature-Branch `feature/bootstrap-pwa-local-ai-v1` konfiguriert. Dieser Commit dient zugleich als erster automatischer Deploy-Trigger für den mobilen Gerätetest.
+Netlify ist für den Testbetrieb auf den Feature-Branch `feature/bootstrap-pwa-local-ai-v1` konfiguriert.
