@@ -1,10 +1,9 @@
 import { detectSensitiveData, privacyMessage } from './privacy-filter.js';
-import { generateHebText, getLocalAiCapability } from './ai-engine.js';
 import { HEB_FORM_CONFIG } from './heb-knowledge.js';
+import { formulateHebDraft } from './fast-formulator.js';
 
 const reportType = document.querySelector('#reportType');
 const formHint = document.querySelector('#formHint');
-const choiceGrid = document.querySelector('#choiceGrid');
 const area = document.querySelector('#area');
 const notes = document.querySelector('#notes');
 const charCount = document.querySelector('#charCount');
@@ -13,56 +12,24 @@ const clearButton = document.querySelector('#clearButton');
 const copyButton = document.querySelector('#copyButton');
 const result = document.querySelector('#result');
 const privacyResult = document.querySelector('#privacyResult');
-const engineBadge = document.querySelector('#engineBadge');
-const progressWrap = document.querySelector('#progressWrap');
-const progressBar = document.querySelector('#progressBar');
-const progressText = document.querySelector('#progressText');
 const detailsButton = document.querySelector('#detailsButton');
 const detailsDialog = document.querySelector('#detailsDialog');
 const closeDialog = document.querySelector('#closeDialog');
 
-const capability = getLocalAiCapability();
-engineBadge.textContent = capability.label;
-if (!capability.supported) engineBadge.classList.add('warning');
+const INPUT_HINTS = {
+  A: 'Beschreibe einfach, was aktuell gelingt, wo Unterstützung nötig ist und was ihr konkret macht. HEB Assist erstellt die passenden Punkte automatisch.',
+  B: 'Beschreibe kurz: Was wurde gemacht? Was hat sich im letzten Zeitraum verändert? Was gelingt aktuell? Wobei wird weiter Unterstützung benötigt? Was soll weitergeführt werden?',
+  C: 'Beschreibe kurz: Was wurde gemacht? Wie hat sich die Person entwickelt? Welcher Hilfebedarf besteht noch? Was ist nach Abschluss vorgesehen und – falls bekannt – durch wen?',
+};
 
-function selectedMode() {
-  return document.querySelector('input[name="mode"]:checked')?.value || 'complete';
-}
-
-function renderFormOptions() {
-  const config = HEB_FORM_CONFIG[reportType.value] || HEB_FORM_CONFIG.A;
-  formHint.textContent = config.hint;
-  choiceGrid.replaceChildren();
-
-  config.modes.forEach(([value, label], index) => {
-    const wrapper = document.createElement('label');
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'mode';
-    input.value = value;
-    input.checked = index === 0;
-    wrapper.append(input, document.createTextNode(` ${label}`));
-    choiceGrid.append(wrapper);
-  });
+function updateFormHint() {
+  formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
 }
 
 function setResult(text, state = 'ready') {
   result.textContent = text;
   result.className = state === 'ready' ? 'result-ready' : state === 'error' ? 'result-error' : 'result-empty';
   copyButton.disabled = state !== 'ready' || !text.trim();
-}
-
-function updateProgress({ percent = 0, text = '' } = {}) {
-  progressWrap.hidden = false;
-  progressBar.style.width = `${Math.max(3, Math.min(100, percent))}%`;
-  progressText.textContent = text || 'Lokale KI arbeitet…';
-}
-
-function hideProgressSoon() {
-  window.setTimeout(() => {
-    progressWrap.hidden = true;
-    progressBar.style.width = '3%';
-  }, 900);
 }
 
 function validateInput() {
@@ -89,7 +56,7 @@ function validateInput() {
 }
 
 reportType.addEventListener('change', () => {
-  renderFormOptions();
+  updateFormHint();
   setResult('Noch keine Formulierung erstellt.', 'empty');
 });
 
@@ -112,36 +79,23 @@ clearButton.addEventListener('click', () => {
   notes.focus();
 });
 
-generateButton.addEventListener('click', async () => {
+generateButton.addEventListener('click', () => {
   const value = validateInput();
   if (!value) return;
 
-  if (!capability.supported) {
-    setResult('Auf diesem Gerät ist die lokale KI aktuell nicht verfügbar, weil WebGPU fehlt. Es wurden keine Falldaten übertragen. Bitte einen aktuellen Browser bzw. ein unterstütztes Gerät verwenden.', 'error');
-    return;
-  }
-
   generateButton.disabled = true;
   copyButton.disabled = true;
-  setResult('Lokale KI wird vorbereitet …', 'empty');
-  updateProgress({ percent: 2, text: 'Lokale KI wird vorbereitet…' });
 
   try {
-    const text = await generateHebText({
+    const draft = formulateHebDraft({
       notes: value,
       area: area.value,
       formType: reportType.value,
-      mode: selectedMode(),
-      onProgress: updateProgress,
     });
-
-    setResult(text, 'ready');
-    hideProgressSoon();
+    setResult(draft, 'ready');
   } catch (error) {
-    console.error('Local AI error:', error?.message || error);
-    setResult('Die lokale KI konnte auf diesem Gerät nicht gestartet werden. Es wurden keine Falldaten an einen KI-Server gesendet. Bitte Browser aktualisieren, ausreichend freien Gerätespeicher sicherstellen und erneut versuchen.', 'error');
-    progressText.textContent = 'Lokale KI konnte nicht gestartet werden.';
-    progressBar.style.width = '100%';
+    console.error('HEB draft error:', error?.message || error);
+    setResult('Die Formulierung konnte nicht erstellt werden. Bitte Eingabe prüfen und erneut versuchen.', 'error');
   } finally {
     generateButton.disabled = false;
   }
@@ -165,7 +119,7 @@ detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
 
-renderFormOptions();
+updateFormHint();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
