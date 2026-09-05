@@ -48,24 +48,24 @@ const INPUT_HINTS = {
 
 const RESULT_SECTIONS = {
   A: [
-    ['a)', 'Aktuelle Situation bzw. Problemlage', 'unter Berücksichtigung der Ressourcen'],
-    ['b)', 'Einschätzung des Hilfebedarfs', ''],
-    ['c)', 'Rahmenziele', 'für den Planungszeitraum'],
-    ['d)', 'Geplante Maßnahmen', ''],
+    { letter: 'a)', title: 'Aktuelle Situation bzw. Problemlage', subtitle: 'unter Berücksichtigung der Ressourcen' },
+    { letter: 'b)', title: 'Einschätzung des Hilfebedarfs', subtitle: '' },
+    { letter: 'c)', title: 'Rahmenziele', subtitle: 'für den Planungszeitraum' },
+    { letter: 'd)', title: 'Geplante Maßnahmen', subtitle: '' },
   ],
   B: [
-    ['a)', 'Reflexion der durchgeführten Maßnahmen', ''],
-    ['b)', 'Entwicklung im letzten Planungszeitraum', 'anhand der Rahmenziele und unter Berücksichtigung der Ressourcen'],
-    ['c)', 'Einschätzung des Hilfebedarfs', ''],
-    ['d)', 'Fortschreibung der Rahmenziele', ''],
-    ['e)', 'Geplante Maßnahmen', ''],
+    { letter: 'a)', title: 'Reflexion der durchgeführten Maßnahmen', subtitle: '' },
+    { letter: 'b)', title: 'Entwicklung im letzten Planungszeitraum', subtitle: 'anhand der Rahmenziele und unter Berücksichtigung der Ressourcen' },
+    { letter: 'c)', title: 'Einschätzung des Hilfebedarfs', subtitle: '' },
+    { letter: 'd)', title: 'Fortschreibung der Rahmenziele', subtitle: '' },
+    { letter: 'e)', title: 'Geplante Maßnahmen', subtitle: '' },
   ],
   C: [
-    ['a)', 'Reflexion der durchgeführten Maßnahmen', 'im letzten Förderzeitraum'],
-    ['b)', 'Entwicklung anhand der Rahmenziele', 'unter Berücksichtigung der Ressourcen'],
-    ['c)', 'Noch bestehender Hilfebedarf', ''],
-    ['d)', 'Weitere vorgesehene Maßnahmen', ''],
-    ['e)', 'Durch wen werden diese Maßnahmen erbracht', ''],
+    { letter: 'a)', title: 'Reflexion der durchgeführten Maßnahmen', subtitle: 'im letzten Förderzeitraum' },
+    { letter: 'b)', title: 'Entwicklung anhand der Rahmenziele', subtitle: 'unter Berücksichtigung der Ressourcen' },
+    { letter: 'c)', title: 'Noch bestehender Hilfebedarf', subtitle: '' },
+    { letter: 'd)', title: 'Weitere Maßnahmen', subtitle: '' },
+    { letter: 'e)', title: 'Durch wen werden diese Maßnahmen erbracht', subtitle: '' },
   ],
 };
 
@@ -80,28 +80,32 @@ function updateFormHint() {
   formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function parseGeneratedSections(text, formType) {
   const defs = RESULT_SECTIONS[formType] || RESULT_SECTIONS.A;
   const parsed = [];
 
   for (let index = 0; index < defs.length; index += 1) {
-    const [letter, title, subtitle] = defs[index];
-    const marker = `${letter} ${title}`;
-    const start = text.indexOf(marker);
+    const def = defs[index];
+    const currentPattern = new RegExp(`(?:^|\\n)${escapeRegExp(def.letter)}\\s+`, 'm');
+    const currentMatch = currentPattern.exec(text);
     const nextDef = defs[index + 1];
-    const nextMarker = nextDef ? `${nextDef[0]} ${nextDef[1]}` : null;
-    const nextStart = nextMarker ? text.indexOf(nextMarker) : -1;
+    const nextPattern = nextDef ? new RegExp(`(?:^|\\n)${escapeRegExp(nextDef.letter)}\\s+`, 'm') : null;
+    const nextMatch = nextPattern ? nextPattern.exec(text) : null;
 
     let body = '';
-    if (start >= 0) {
-      const bodyStart = start + marker.length;
-      body = text.slice(bodyStart, nextStart > bodyStart ? nextStart : text.length).trim();
-      if (subtitle && body.toLowerCase().startsWith(subtitle.toLowerCase())) {
-        body = body.slice(subtitle.length).trim();
-      }
+    if (currentMatch) {
+      const start = currentMatch.index + currentMatch[0].length;
+      const end = nextMatch && nextMatch.index > start ? nextMatch.index : text.length;
+      const block = text.slice(start, end).trim();
+      const firstLineBreak = block.indexOf('\n');
+      body = firstLineBreak >= 0 ? block.slice(firstLineBreak + 1).trim() : '';
     }
 
-    parsed.push({ letter, title, subtitle, body: body || 'Hierzu liegen keine ausreichenden Angaben vor.' });
+    parsed.push({ ...def, body: body || 'Hierzu liegen keine ausreichenden Angaben vor.' });
   }
 
   return parsed;
