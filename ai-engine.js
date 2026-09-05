@@ -4,7 +4,19 @@ const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 
 let generatorPromise = null;
+let generatorInstance = null;
 let modelInfo = null;
+let modelState = {
+  status: 'idle',
+  percent: 0,
+  text: 'KI wird vorbereitet …',
+  error: null,
+};
+
+function setModelState(next, onProgress) {
+  modelState = { ...modelState, ...next };
+  onProgress?.({ ...modelState });
+}
 
 export function getLocalAiCapability() {
   const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -13,6 +25,14 @@ export function getLocalAiCapability() {
     supported: hasWebGPU,
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
+}
+
+export function getLocalAiStatus() {
+  return { ...modelState };
+}
+
+export function isLocalAiReady() {
+  return Boolean(generatorInstance);
 }
 
 async function chooseDtype() {
@@ -26,13 +46,20 @@ async function chooseDtype() {
 }
 
 async function loadGenerator(onProgress) {
+  if (generatorInstance) {
+    setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+    return generatorInstance;
+  }
+
   if (!getLocalAiCapability().supported) {
-    throw new Error('Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.');
+    const error = new Error('Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.');
+    setModelState({ status: 'fallback', percent: 0, text: 'Schneller Modus aktiv', error: error.message }, onProgress);
+    throw error;
   }
 
   if (!generatorPromise) {
     generatorPromise = (async () => {
-      onProgress?.({ phase: 'library', percent: 3, text: 'KI-Bibliothek wird geladen…' });
+      setModelState({ status: 'loading', percent: 3, text: 'KI-Bibliothek wird geladen …', error: null }, onProgress);
       const { pipeline, env } = await import(TRANSFORMERS_URL);
 
       if (env) {
@@ -41,8 +68,7 @@ async function loadGenerator(onProgress) {
       }
 
       const dtype = await chooseDtype();
-      modelInfo = { id: MODEL_ID, dtype, device: 'webgpu' };
-      onProgress?.({ phase: 'model', percent: 8, text: 'Lokales Sprachmodell wird vorbereitet…' });
+      setModelState({ status: 'loading', percent: 8, text: 'Sprachmodell wird vorbereitet …' }, onProgress);
 
       const pipe = await pipeline('text-generation', MODEL_ID, {
         device: 'webgpu',
@@ -51,21 +77,40 @@ async function loadGenerator(onProgress) {
           if (!event) return;
           const progress = typeof event.progress === 'number' ? Math.round(event.progress) : null;
           if (progress !== null) {
-            const bounded = Math.min(88, Math.max(8, Math.round(8 + progress * 0.8)));
-            onProgress?.({ phase: 'model', percent: bounded, text: `Modell wird lokal geladen… ${progress}%` });
+            const bounded = Math.min(96, Math.max(8, progress));
+            setModelState({
+              status: 'loading',
+              percent: bounded,
+              text: `KI wird geladen · ${progress}%`,
+            }, onProgress);
           }
         },
       });
 
-      onProgress?.({ phase: 'ready', percent: 90, text: 'Lokale KI ist bereit.' });
+      generatorInstance = pipe;
+      modelInfo = { id: MODEL_ID, dtype, device: 'webgpu' };
+      setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
       return pipe;
     })().catch((error) => {
       generatorPromise = null;
+      generatorInstance = null;
+      setModelState({
+        status: 'fallback',
+        percent: 0,
+        text: 'Schneller Modus aktiv',
+        error: error?.message || String(error),
+      }, onProgress);
       throw error;
     });
+  } else {
+    onProgress?.({ ...modelState });
   }
 
   return generatorPromise;
+}
+
+export function preloadLocalAi(onProgress) {
+  return loadGenerator(onProgress);
 }
 
 function buildMessages({ notes, area, formType, mode }) {
@@ -93,22 +138,16 @@ function extractAssistantText(output) {
     if (lastAssistant?.content) return String(lastAssistant.content).trim();
   }
 
-  if (typeof generated === 'string') {
-    return generated.trim();
-  }
-
-  if (typeof output?.[0]?.text === 'string') {
-    return output[0].text.trim();
-  }
-
+  if (typeof generated === 'string') return generated.trim();
+  if (typeof output?.[0]?.text === 'string') return output[0].text.trim();
   throw new Error('Die lokale KI hat kein verwertbares Ergebnis geliefert.');
 }
 
-export async function generateHebText({ notes, area, formType, mode, onProgress }) {
+export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
   const generator = await loadGenerator(onProgress);
   const messages = buildMessages({ notes, area, formType, mode });
 
-  onProgress?.({ phase: 'generate', percent: 93, text: 'Formulierung wird auf diesem Gerät erstellt…' });
+  onProgress?.({ status: 'generating', percent: 100, text: 'KI formuliert …', error: null });
 
   const output = await generator(messages, {
     max_new_tokens: mode === 'complete' ? 420 : 260,
@@ -116,7 +155,6 @@ export async function generateHebText({ notes, area, formType, mode, onProgress 
     repetition_penalty: 1.08,
   });
 
-  onProgress?.({ phase: 'done', percent: 100, text: 'Fertig.' });
   return extractAssistantText(output);
 }
 
