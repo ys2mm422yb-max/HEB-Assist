@@ -1,4 +1,4 @@
-const BUILD_ID = '2026-09-05-2320';
+const BUILD_ID = '2026-09-05-2340';
 
 async function prepareLatestApp() {
   if ('serviceWorker' in navigator) {
