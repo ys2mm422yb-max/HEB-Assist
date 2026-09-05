@@ -1,0 +1,218 @@
+:root {
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #edf5f2;
+    background: #0d1514;
+    --accent: #2aa79a;
+    --accent-dark: #238d82;
+    --surface: #15201e;
+    --muted: #9eaaa6;
+    --border: #30403c;
+    --soft: #20302d;
+    --danger: #ff8e83;
+    --danger-soft: #351c1a;
+  }
+
+  body {
+    background: linear-gradient(180deg, #0d1b19 0, #101816 260px, #0d1514 100%);
+    color: #edf5f2;
+  }
+
+  .startup-gate {
+    background:
+      radial-gradient(circle at 50% 18%, rgba(42, 167, 154, .13), transparent 38%),
+      linear-gradient(180deg, #0e1b19 0%, #101816 100%);
+  }
+
+  .startup-brand,
+  .startup-card h1,
+  .topbar h1,
+  .result-heading h2,
+  .dialog-body h2 {
+    color: #f3f8f6;
+  }
+
+  .startup-card > p,
+  .startup-progress-meta,
+  .topbar p,
+  .field-meta,
+  .progress-wrap,
+  .quality-note,
+  footer,
+  .dialog-body p {
+    color: #9eaaa6;
+  }
+
+  .startup-progress-meta strong,
+  .privacy-strip strong,
+  .eyebrow,
+  .heb-result-meta-label {
+    color: #76c9bf;
+  }
+
+  .startup-progress-track,
+  .progress-track {
+    background: #263532;
+  }
+
+  .startup-note,
+  .ai-status-strip,
+  .privacy-strip {
+    border-color: #344a45;
+    background: rgba(21, 32, 30, .82);
+    color: #cbd6d2 !important;
+  }
+
+  .startup-error,
+  .privacy-result,
+  .engine-error-box {
+    border-color: #77413b;
+    background: #351c1a;
+    color: #ffb0a8;
+  }
+
+  .startup-error code,
+  .engine-error-box code {
+    background: rgba(9, 14, 13, .55);
+    color: #ffd5d1;
+  }
+
+  .engine-error-box p {
+    color: #ffb0a8;
+  }
+
+  .panel,
+  dialog {
+    background: #15201e;
+    border-color: #30403c;
+    color: #edf5f2;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .25);
+  }
+
+  label,
+  legend {
+    color: #dce7e3;
+  }
+
+  select,
+  textarea,
+  .choice-grid label {
+    background: #111b19;
+    border-color: #3a4a46;
+    color: #edf5f2;
+  }
+
+  option {
+    background: #111b19;
+    color: #edf5f2;
+  }
+
+  textarea::placeholder {
+    color: #778580;
+    opacity: 1;
+  }
+
+  textarea:disabled {
+    background: #121a18;
+    color: #73807c;
+    -webkit-text-fill-color: #73807c;
+  }
+
+  select:focus,
+  textarea:focus {
+    border-color: #4eb8ac;
+    box-shadow: 0 0 0 4px rgba(42, 167, 154, .13);
+    background: #14201d;
+  }
+
+  .secondary-button {
+    background: #20332f;
+    color: #83d2c8;
+  }
+
+  .text-button {
+    color: #6fc8bd;
+  }
+
+  .status-badge {
+    border-color: #375b55;
+    background: #172825;
+    color: #8bd5cc;
+  }
+
+  .status-badge.loading {
+    border-color: #42586b;
+    background: #17212a;
+    color: #9cc4df;
+  }
+
+  .status-badge.ready {
+    border-color: #37645d;
+    background: #162925;
+    color: #89d8ce;
+  }
+
+  .status-badge.warning {
+    border-color: #765d30;
+    background: #2b2417;
+    color: #f0c26f;
+  }
+
+  .result-heading,
+  .quality-note {
+    border-color: #2d3d39;
+  }
+
+  .result-empty {
+    color: #81908b;
+    border-color: #384944;
+    background: #111917;
+  }
+
+  .result-ready {
+    color: #e3ece9;
+  }
+
+  .heb-result-meta {
+    border-color: #35514b;
+    background: #172724;
+  }
+
+  .heb-result-meta-area {
+    color: #edf5f2;
+  }
+
+  .heb-result-section {
+    border-color: #344641;
+    background: #111a18;
+  }
+
+  .heb-result-section-head {
+    border-color: #344641;
+    background: #1a2926;
+  }
+
+  .heb-result-section-letter {
+    background: #24413c;
+    color: #8ad8ce;
+  }
+
+  .heb-result-section-titles h3 {
+    color: #edf5f2;
+  }
+
+  .heb-result-section-titles span {
+    color: #9aa8a4;
+  }
+
+  .heb-result-section-body p {
+    color: #dce7e3;
+  }
+
+  dialog::backdrop {
+    background: rgba(0, 0, 0, .66);
+  }
+}
