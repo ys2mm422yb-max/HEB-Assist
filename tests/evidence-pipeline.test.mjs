@@ -30,6 +30,20 @@ const safe = validateAnchoredHebText(
 );
 assert.equal(safe.ok, true, `Quellennahe fachliche Umformulierung wurde fälschlich verworfen: ${safe.reasons.join(', ')}`);
 
+const safeInitiation = validateAnchoredHebText(
+  'Zur Initiierung der Körperpflege benötigt die Person morgens häufig einen verbalen Impuls.',
+  [units[0].text],
+  { maxWords: 20 },
+);
+assert.equal(safeInitiation.ok, true, `Neutrale fachliche Paraphrase wurde fälschlich verworfen: ${safeInitiation.reasons.join(', ')}`);
+
+const safeFinances = validateAnchoredHebText(
+  'Beim Umgang mit den verfügbaren finanziellen Mitteln benötigt die Person Unterstützung.',
+  [units[5].text],
+  { maxWords: 20 },
+);
+assert.equal(safeFinances.ok, true, `Belegte Finanz-Formulierung wurde fälschlich verworfen: ${safeFinances.reasons.join(', ')}`);
+
 const inventedCause = validateAnchoredHebText(
   'Die Person hat aufgrund von Ermüdung Schwierigkeiten mit der Körperpflege.',
   [units[0].text],
