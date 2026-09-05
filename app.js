@@ -46,19 +46,134 @@ const INPUT_HINTS = {
   C: 'Beschreibe kurz: Was wurde gemacht? Wie hat sich die Person entwickelt? Welcher Hilfebedarf besteht noch? Was ist nach Abschluss vorgesehen und – falls bekannt – durch wen?',
 };
 
+const RESULT_SECTIONS = {
+  A: [
+    ['a)', 'Aktuelle Situation bzw. Problemlage', 'unter Berücksichtigung der Ressourcen'],
+    ['b)', 'Einschätzung des Hilfebedarfs', ''],
+    ['c)', 'Rahmenziele', 'für den Planungszeitraum'],
+    ['d)', 'Geplante Maßnahmen', ''],
+  ],
+  B: [
+    ['a)', 'Reflexion der durchgeführten Maßnahmen', ''],
+    ['b)', 'Entwicklung im letzten Planungszeitraum', 'anhand der Rahmenziele und unter Berücksichtigung der Ressourcen'],
+    ['c)', 'Einschätzung des Hilfebedarfs', ''],
+    ['d)', 'Fortschreibung der Rahmenziele', ''],
+    ['e)', 'Geplante Maßnahmen', ''],
+  ],
+  C: [
+    ['a)', 'Reflexion der durchgeführten Maßnahmen', 'im letzten Förderzeitraum'],
+    ['b)', 'Entwicklung anhand der Rahmenziele', 'unter Berücksichtigung der Ressourcen'],
+    ['c)', 'Noch bestehender Hilfebedarf', ''],
+    ['d)', 'Weitere vorgesehene Maßnahmen', ''],
+    ['e)', 'Durch wen werden diese Maßnahmen erbracht', ''],
+  ],
+};
+
 const READY_PLACEHOLDER = notes.getAttribute('placeholder') || '';
 const LOADING_PLACEHOLDER = 'Eingabe wird freigeschaltet, sobald die lokale KI vollständig gestartet ist.';
 
 let serviceWorkerRegistration = null;
 let aiLoadInProgress = false;
+let lastCopyText = '';
 
 function updateFormHint() {
   formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
 }
 
+function parseGeneratedSections(text, formType) {
+  const defs = RESULT_SECTIONS[formType] || RESULT_SECTIONS.A;
+  const parsed = [];
+
+  for (let index = 0; index < defs.length; index += 1) {
+    const [letter, title, subtitle] = defs[index];
+    const marker = `${letter} ${title}`;
+    const start = text.indexOf(marker);
+    const nextDef = defs[index + 1];
+    const nextMarker = nextDef ? `${nextDef[0]} ${nextDef[1]}` : null;
+    const nextStart = nextMarker ? text.indexOf(nextMarker) : -1;
+
+    let body = '';
+    if (start >= 0) {
+      const bodyStart = start + marker.length;
+      body = text.slice(bodyStart, nextStart > bodyStart ? nextStart : text.length).trim();
+      if (subtitle && body.toLowerCase().startsWith(subtitle.toLowerCase())) {
+        body = body.slice(subtitle.length).trim();
+      }
+    }
+
+    parsed.push({ letter, title, subtitle, body: body || 'Hierzu liegen keine ausreichenden Angaben vor.' });
+  }
+
+  return parsed;
+}
+
+function renderHebResult(text) {
+  result.replaceChildren();
+
+  const meta = document.createElement('div');
+  meta.className = 'heb-result-meta';
+
+  const metaLabel = document.createElement('span');
+  metaLabel.className = 'heb-result-meta-label';
+  metaLabel.textContent = reportType.options[reportType.selectedIndex]?.textContent || `HEB ${reportType.value}`;
+
+  const metaArea = document.createElement('strong');
+  metaArea.className = 'heb-result-meta-area';
+  metaArea.textContent = area.value;
+
+  meta.append(metaLabel, metaArea);
+  result.append(meta);
+
+  const sections = parseGeneratedSections(text, reportType.value);
+  for (const section of sections) {
+    const sectionEl = document.createElement('section');
+    sectionEl.className = 'heb-result-section';
+
+    const head = document.createElement('div');
+    head.className = 'heb-result-section-head';
+
+    const letter = document.createElement('span');
+    letter.className = 'heb-result-section-letter';
+    letter.textContent = section.letter;
+
+    const titles = document.createElement('div');
+    titles.className = 'heb-result-section-titles';
+
+    const title = document.createElement('h3');
+    title.textContent = section.title;
+    titles.append(title);
+
+    if (section.subtitle) {
+      const subtitle = document.createElement('span');
+      subtitle.textContent = section.subtitle;
+      titles.append(subtitle);
+    }
+
+    head.append(letter, titles);
+
+    const body = document.createElement('div');
+    body.className = 'heb-result-section-body';
+    const paragraph = document.createElement('p');
+    paragraph.textContent = section.body;
+    body.append(paragraph);
+
+    sectionEl.append(head, body);
+    result.append(sectionEl);
+  }
+}
+
 function setResult(text, state = 'ready') {
-  result.textContent = text;
   result.className = state === 'ready' ? 'result-ready' : state === 'error' ? 'result-error' : 'result-empty';
+
+  if (state === 'ready') {
+    renderHebResult(text);
+    const formName = reportType.options[reportType.selectedIndex]?.textContent || `HEB ${reportType.value}`;
+    lastCopyText = `${formName}\n${area.value}\n\n${text}`.trim();
+  } else {
+    result.textContent = text;
+    lastCopyText = '';
+  }
+
   copyButton.disabled = state !== 'ready' || !text.trim();
 }
 
@@ -267,9 +382,6 @@ async function setupAutomaticAppUpdates() {
       });
     });
 
-    // Updates are downloaded/activated in the background, but the currently
-    // opened page is never force-reloaded. The latest app code is loaded on
-    // the next normal opening so model downloads and drafts are not lost.
     await checkForAppUpdate();
   } catch (error) {
     console.warn('Service Worker registration failed:', error?.message || error);
@@ -333,14 +445,14 @@ generateButton.addEventListener('click', async () => {
 });
 
 copyButton.addEventListener('click', async () => {
-  if (copyButton.disabled) return;
+  if (copyButton.disabled || !lastCopyText) return;
   try {
-    await navigator.clipboard.writeText(result.textContent);
+    await navigator.clipboard.writeText(lastCopyText);
     const old = copyButton.textContent;
     copyButton.textContent = 'Kopiert';
     window.setTimeout(() => { copyButton.textContent = old; }, 1200);
   } catch {
-    setResult(`${result.textContent}\n\n(Hinweis: Automatisches Kopieren wurde vom Browser blockiert.)`, 'ready');
+    setResult(`${lastCopyText}\n\n(Hinweis: Automatisches Kopieren wurde vom Browser blockiert.)`, 'ready');
   }
 });
 
