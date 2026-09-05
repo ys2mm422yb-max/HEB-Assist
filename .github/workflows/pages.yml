@@ -7,6 +7,7 @@ on:
     paths:
       - 'index.html'
       - 'styles.css'
+      - 'dark-mode.css'
       - 'bootstrap.js'
       - 'app.js'
       - 'ai-engine.js'
