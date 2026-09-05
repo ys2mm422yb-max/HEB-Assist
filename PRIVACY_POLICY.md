@@ -28,20 +28,28 @@ In v1 gilt:
 - keine serverseitige Chat-Historie
 - keine Analytics mit Texteingaben
 - keine Fehlerlogs mit Texteingaben
-- keine Übertragung von Eingaben an GitHub, Hostinganbieter oder Modell-Repository
+- keine Übertragung von HEB-Eingaben an GitHub, Hostinganbieter, jsDelivr oder Hugging Face zur KI-Inferenz
 
-Das KI-Modell darf beim ersten Gebrauch aus einer externen Quelle heruntergeladen und anschließend vom Browser gecacht werden. Dieser Modelldownload enthält keine HEB-Eingaben.
+## Netzwerkzugriffe
 
-## Netzwerk
+Für den Betrieb werden statische Ressourcen aus externen Quellen geladen:
 
-Nach Laden der Web-App und des Modells soll die eigentliche Textverarbeitung lokal erfolgen. Netzwerkzugriffe werden auf notwendige statische App-/Modellressourcen begrenzt.
+- GitHub Pages: App-Dateien
+- jsDelivr: `gemma-webgpu`-Laufzeitbibliothek
+- Hugging Face: Gemma-Modellgewichte
+
+Das Modell wird speicherschonend über HTTP-Range-Requests in Abschnitten geladen. Diese Download-Anfragen enthalten keinen HEB-Falltext. Normale technische Verbindungsmetadaten wie IP-Adresse, User-Agent und Zeitstempel können bei den jeweiligen Infrastrukturbetreibern anfallen.
+
+Nach erfolgreichem Laden des Modells erfolgt die eigentliche Textgenerierung lokal im Browser auf dem Endgerät. Die HEB-Eingabe wird dabei nicht an einen externen Inferenzdienst gesendet.
+
+Browser und Betriebssystem entscheiden selbst über HTTP-/Site-Caches. Deshalb darf nicht garantiert werden, dass Modellressourcen dauerhaft lokal gespeichert bleiben oder niemals erneut geladen werden müssen.
 
 ## Entwicklung und Tests
 
 - ausschließlich synthetische Testfälle
 - keine echten Bewohnerdaten in Git, PRs, Issues oder Screenshots
 - kein Debug-Logging des vollständigen Nutzereingabetextes
-- sicherheitsrelevante Änderungen werden im Pull Request dokumentiert
+- sicherheitsrelevante Änderungen werden nachvollziehbar dokumentiert
 
 ## Produktivfreigabe
 
