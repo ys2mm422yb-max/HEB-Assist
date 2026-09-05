@@ -7,6 +7,8 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - HEB-Assist darf keine Abhängigkeit zu bestehenden privaten Projekten des Repository-Inhabers haben.
 - Keine gemeinsam genutzten Datenbanken, API-Schlüssel, Secrets, Nutzerkonten, Deployments oder Backends.
 - Kein Kopieren echter Fall-/Bewohnerdaten aus anderen Systemen.
+- **Das GitHub-Repository von HEB-Assist muss dauerhaft privat bleiben und darf niemals öffentlich gestellt werden.**
+- Es darf kein öffentliches Spiegel-Repository, kein öffentlicher Code-Mirror und keine Veröffentlichung interner Projektregeln oder nicht für die Öffentlichkeit bestimmter Projektdateien angelegt werden.
 
 ## 2. Git-Workflow
 
