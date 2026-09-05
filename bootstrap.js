@@ -1,4 +1,4 @@
-const BUILD_ID = '2026-09-06-0014';
+const BUILD_ID = '2026-09-06-0033';
 
 function startAppWhenVisible() {
   const start = async () => {
