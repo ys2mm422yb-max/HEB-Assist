@@ -1,6 +1,5 @@
 import { detectSensitiveData, privacyMessage } from './privacy-filter.js';
 import { HEB_FORM_CONFIG } from './heb-knowledge.js';
-import { formulateHebDraft } from './fast-formulator.js';
 import {
   generateHebText,
   getLocalAiCapability,
@@ -21,10 +20,13 @@ const privacyResult = document.querySelector('#privacyResult');
 const detailsButton = document.querySelector('#detailsButton');
 const detailsDialog = document.querySelector('#detailsDialog');
 const closeDialog = document.querySelector('#closeDialog');
+const retryAiButton = document.querySelector('#retryAiButton');
 const engineBadge = document.querySelector('#engineBadge');
 const engineStatusText = document.querySelector('#engineStatusText');
 const engineProgressBar = document.querySelector('#engineProgressBar');
 const engineProgressTrack = document.querySelector('#engineProgressTrack');
+const engineErrorBox = document.querySelector('#engineErrorBox');
+const engineErrorText = document.querySelector('#engineErrorText');
 
 const INPUT_HINTS = {
   A: 'Beschreibe einfach, was aktuell gelingt, wo Unterstützung nötig ist und was ihr konkret macht. HEB Assist erstellt die passenden Punkte automatisch.',
@@ -32,9 +34,13 @@ const INPUT_HINTS = {
   C: 'Beschreibe kurz: Was wurde gemacht? Wie hat sich die Person entwickelt? Welcher Hilfebedarf besteht noch? Was ist nach Abschluss vorgesehen und – falls bekannt – durch wen?',
 };
 
+const READY_PLACEHOLDER = notes.getAttribute('placeholder') || '';
+const LOADING_PLACEHOLDER = 'Eingabe wird freigeschaltet, sobald die lokale KI vollständig gestartet ist.';
+
 let serviceWorkerRegistration = null;
 let pendingAppReload = false;
 let updateReloadStarted = false;
+let aiLoadInProgress = false;
 
 function updateFormHint() {
   formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
@@ -46,6 +52,13 @@ function setResult(text, state = 'ready') {
   copyButton.disabled = state !== 'ready' || !text.trim();
 }
 
+function setAiInputEnabled(enabled) {
+  notes.disabled = !enabled;
+  generateButton.disabled = !enabled;
+  clearButton.disabled = !enabled;
+  notes.placeholder = enabled ? READY_PLACEHOLDER : LOADING_PLACEHOLDER;
+}
+
 function updateEngineStatus(status = {}) {
   const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, status.percent)) : 0;
   engineProgressBar.style.width = `${Math.max(3, percent)}%`;
@@ -55,32 +68,66 @@ function updateEngineStatus(status = {}) {
   if (status.status === 'ready') {
     engineBadge.textContent = 'KI ist bereit ✓';
     engineBadge.classList.add('ready');
-    engineStatusText.textContent = 'Das stärkere lokale Sprachmodell ist einsatzbereit. Neue Entwürfe werden damit erstellt.';
+    engineStatusText.textContent = 'Das lokale Sprachmodell ist vollständig gestartet. HEB-Eingaben können jetzt verarbeitet werden.';
     engineProgressTrack.hidden = true;
+    engineErrorBox.hidden = true;
+    engineErrorText.textContent = '';
+    retryAiButton.hidden = true;
+    setAiInputEnabled(true);
     return;
   }
 
-  if (status.status === 'fallback') {
-    engineBadge.textContent = 'Schneller Modus aktiv';
+  if (status.status === 'error') {
+    engineBadge.textContent = 'KI nicht verfügbar';
     engineBadge.classList.add('warning');
-    engineStatusText.textContent = 'Das große Sprachmodell konnte auf diesem Gerät nicht gestartet werden. HEB Assist bleibt im schnellen lokalen Modus nutzbar.';
+    engineStatusText.textContent = 'Das lokale Sprachmodell konnte nicht gestartet werden. HEB Assist verarbeitet deshalb keine HEB-Eingaben.';
     engineProgressTrack.hidden = true;
+    engineErrorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.';
+    engineErrorBox.hidden = false;
+    retryAiButton.hidden = false;
+    setAiInputEnabled(false);
     return;
   }
 
+  setAiInputEnabled(false);
   engineBadge.classList.add('loading');
   engineProgressTrack.hidden = false;
+  engineErrorBox.hidden = true;
+  engineErrorText.textContent = '';
+  retryAiButton.hidden = true;
 
   if (status.status === 'loading') {
     engineBadge.textContent = percent > 0 ? `KI lädt · ${Math.round(percent)}%` : 'KI wird geladen …';
-    engineStatusText.textContent = status.text || 'Das Sprachmodell wird im Hintergrund geladen. Die App ist währenddessen bereits nutzbar.';
+    engineStatusText.textContent = status.text || 'Das lokale Sprachmodell wird geladen. Die Eingabe bleibt bis zum vollständigen Start gesperrt.';
+  } else if (status.status === 'generating') {
+    engineBadge.textContent = 'KI formuliert …';
+    engineProgressTrack.hidden = true;
+    engineStatusText.textContent = 'Die lokale KI erstellt den HEB-Entwurf.';
   } else {
     engineBadge.textContent = 'KI wird vorbereitet …';
-    engineStatusText.textContent = 'Das Sprachmodell wird automatisch im Hintergrund vorbereitet. Die App ist währenddessen bereits nutzbar.';
+    engineStatusText.textContent = 'Das lokale Sprachmodell wird automatisch vorbereitet. Die Eingabe bleibt bis zum vollständigen Start gesperrt.';
+  }
+}
+
+async function startLocalAi() {
+  if (aiLoadInProgress || isLocalAiReady()) return;
+  aiLoadInProgress = true;
+  updateEngineStatus({ status: 'idle', percent: 0, error: null });
+  try {
+    await preloadLocalAi(updateEngineStatus);
+  } catch (error) {
+    console.warn('Local AI start failed:', error?.message || error);
+  } finally {
+    aiLoadInProgress = false;
   }
 }
 
 function validateInput() {
+  if (!isLocalAiReady()) {
+    setResult('Die lokale KI ist noch nicht einsatzbereit. Bitte warte, bis oben rechts „KI ist bereit ✓“ angezeigt wird.', 'error');
+    return null;
+  }
+
   const value = notes.value.trim();
   privacyResult.hidden = true;
   privacyResult.textContent = '';
@@ -179,7 +226,7 @@ clearButton.addEventListener('click', () => {
   privacyResult.hidden = true;
   setResult('Noch keine Formulierung erstellt.', 'empty');
   maybeReloadForUpdate();
-  if (!pendingAppReload) notes.focus();
+  if (!pendingAppReload && isLocalAiReady()) notes.focus();
 });
 
 generateButton.addEventListener('click', async () => {
@@ -188,38 +235,29 @@ generateButton.addEventListener('click', async () => {
 
   generateButton.disabled = true;
   copyButton.disabled = true;
-
-  const args = {
-    notes: value,
-    area: area.value,
-    formType: reportType.value,
-  };
+  setResult('KI formuliert den HEB-Entwurf …', 'empty');
 
   try {
-    if (isLocalAiReady()) {
-      setResult('KI formuliert den HEB-Entwurf …', 'empty');
-      try {
-        const aiDraft = await generateHebText({
-          ...args,
-          mode: 'complete',
-          onProgress: updateEngineStatus,
-        });
-        setResult(aiDraft, 'ready');
-        updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓' });
-        return;
-      } catch (error) {
-        console.warn('Local AI generation failed, using fast fallback:', error?.message || error);
-        updateEngineStatus({ status: 'fallback', percent: 0, text: 'Schneller Modus aktiv' });
-      }
-    }
-
-    const draft = formulateHebDraft(args);
-    setResult(draft, 'ready');
+    const aiDraft = await generateHebText({
+      notes: value,
+      area: area.value,
+      formType: reportType.value,
+      mode: 'complete',
+      onProgress: updateEngineStatus,
+    });
+    setResult(aiDraft, 'ready');
+    updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
   } catch (error) {
-    console.error('HEB draft error:', error?.message || error);
-    setResult('Die Formulierung konnte nicht erstellt werden. Bitte Eingabe prüfen und erneut versuchen.', 'error');
+    console.warn('Local AI generation failed:', error?.message || error);
+    updateEngineStatus({
+      status: 'error',
+      percent: 0,
+      text: 'KI nicht verfügbar',
+      error: error?.message || String(error),
+    });
+    setResult('Die lokale KI ist ausgefallen. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet. Öffne „Technik & Datenschutz“ für die technische Fehlermeldung und versuche anschließend „KI erneut starten“.', 'error');
   } finally {
-    generateButton.disabled = false;
+    generateButton.disabled = !isLocalAiReady();
   }
 });
 
@@ -236,7 +274,12 @@ copyButton.addEventListener('click', async () => {
 });
 
 detailsButton.addEventListener('click', () => detailsDialog.showModal());
+engineBadge.addEventListener('click', () => detailsDialog.showModal());
 closeDialog.addEventListener('click', () => detailsDialog.close());
+retryAiButton.addEventListener('click', () => {
+  detailsDialog.close();
+  startLocalAi();
+});
 detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
@@ -258,17 +301,18 @@ window.setInterval(() => {
 }, 5 * 60 * 1000);
 
 updateFormHint();
+setAiInputEnabled(false);
 updateEngineStatus({ status: 'idle', percent: 0 });
 
 const capability = getLocalAiCapability();
 if (!capability.supported) {
-  updateEngineStatus({ status: 'fallback', percent: 0 });
+  updateEngineStatus({
+    status: 'error',
+    percent: 0,
+    error: 'Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.',
+  });
 } else {
-  window.setTimeout(() => {
-    preloadLocalAi(updateEngineStatus).catch((error) => {
-      console.warn('Background AI preload failed:', error?.message || error);
-    });
-  }, 500);
+  window.setTimeout(startLocalAi, 500);
 }
 
 window.addEventListener('load', setupAutomaticAppUpdates);
