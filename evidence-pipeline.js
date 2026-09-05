@@ -76,7 +76,9 @@ export function parseEvidenceClassification(text, modes, units, limits = {}) {
 
   for (const mode of modes) {
     const escaped = mode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = source.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*[:=]\\s*([^\\n]*)`, 'i'));
+    // Nur horizontale Leerzeichen zulassen. `\s*` würde bei einer leeren Zeile
+    // in den nächsten HEB-Unterpunkt springen und dessen IDs fälschlich übernehmen.
+    const match = source.match(new RegExp(`(?:^|\\n)[ \\t]*${escaped}[ \\t]*[:=][ \\t]*([^\\n]*)`, 'i'));
     const ids = [];
     const seen = new Set();
     const max = Math.max(0, Number(limits[mode] || 6));
@@ -179,9 +181,6 @@ export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } =
   const uniqueOutput = new Set(outputRoots);
   const unsupportedRatio = uniqueOutput.size ? unsupported.length / uniqueOutput.size : 0;
 
-  // Da jeder Mikrotext nur EINEN Originalbeleg erhält, darf die Formulierung
-  // kaum neue Inhaltswörter einführen. Genau dadurch können Inhalte verschiedener
-  // Aussagen nicht unbemerkt miteinander vermischt werden.
   if (unsupported.length >= 2 || (unsupported.length === 1 && unsupportedRatio > 0.22)) {
     reasons.push(`nicht belegte Inhaltswörter: ${unsupported.slice(0, 4).join(', ')}`);
   }
