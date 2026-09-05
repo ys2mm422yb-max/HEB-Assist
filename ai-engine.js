@@ -1,58 +1,52 @@
 import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
 
-const GEMMA_WEBGPU_URL = 'https://cdn.jsdelivr.net/npm/gemma-webgpu@0.1.0/dist/index.js';
-const IS_IOS = typeof navigator !== 'undefined' && (
-  /iPad|iPhone|iPod/i.test(navigator.userAgent || '') ||
-  (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1)
-);
-const MODEL_KEY = IS_IOS ? '270m' : '1b';
-const MODEL_LABEL = IS_IOS ? 'Gemma 3 270M Q8_0' : 'Gemma 3 1B Q8_0';
-const MODEL_PROFILE = IS_IOS ? 'streaming-webgpu-ios-270m' : 'streaming-webgpu-1b';
-const CONTEXT_LENGTH = 1024;
+const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm';
+const MODEL_KEY = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+const MODEL_LABEL = 'Qwen 2.5 0.5B Instruct';
+const MODEL_PROFILE = 'webllm-qwen25-05b-cached';
 
-const CORE_RULES = `Du bist HEB Assist, ein fachlicher Formulierungsassistent für die sozialpsychiatrische Eingliederungshilfe.
-Regeln:
-- Nutze ausschließlich Angaben aus der Fallbeschreibung. Nichts erfinden oder ergänzen.
-- Keine Diagnose, Symptome, Risiken, Fähigkeiten, Ressourcen, Entwicklung, Ziele, Maßnahmen oder Hilfebedarfe behaupten, die nicht aus der Eingabe hervorgehen.
-- Schreibe sachlich, wertschätzend, ressourcenorientiert und in professionellem, gut verständlichem Deutsch.
-- Verwende keine Namen; schreibe „die leistungsberechtigte Person“ oder „die Person“.
-- Selbstaussage, Beobachtung und fachliche Einschätzung nicht vermischen.
+const CORE_RULES = `Du bist HEB Assist. Du formulierst ausschließlich professionelle HEB-Texte für die sozialpsychiatrische Eingliederungshilfe.
+
+Verbindliche Regeln:
+- Nutze ausschließlich Tatsachen aus der Fallbeschreibung. Nichts erfinden, vermuten oder ergänzen.
+- Keine Diagnose, Ursache, Symptome, Risiken, Fähigkeiten, Ressourcen, Entwicklung, Ziele, Maßnahmen oder Hilfebedarfe ergänzen, die nicht aus der Eingabe hervorgehen.
+- Schreibe in klarem, korrektem, professionellem Deutsch.
+- Sachlich, wertschätzend, ressourcenorientiert und personenzentriert formulieren.
+- Verwende „die Person“ oder „die leistungsberechtigte Person“, keine Namen.
+- Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
 - Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
-- Wenn für den verlangten Unterpunkt Angaben fehlen, schreibe knapp: „Hierzu liegen keine ausreichenden Angaben vor.“`;
-
-const IOS_RULES = `Formuliere einen kurzen fachlichen HEB-Text in gutem Deutsch.
-Regeln:
-- Nur Tatsachen aus der Fallbeschreibung verwenden. Nichts erfinden.
-- Keine Diagnose, Ursache, Fähigkeit, Ziel oder Maßnahme ergänzen, die nicht genannt ist.
-- Sachlich, wertschätzend und ressourcenorientiert schreiben.
-- Wenn Angaben für den verlangten Unterpunkt fehlen, antworte exakt: „Hierzu liegen keine ausreichenden Angaben vor.“`;
+- Keine Überschriften, Listen, HEB-Kürzel oder Meta-Kommentare in der eigentlichen Antwort.
+- Wenn für den verlangten Unterpunkt Angaben fehlen, antworte exakt: „Hierzu liegen keine ausreichenden Angaben vor.“
+- Antworte nur mit dem fertigen Text für genau den angeforderten Unterpunkt.`;
 
 const SECTION_MODES = {
   A: [
     ['current', 'a) Aktuelle Situation bzw. Problemlage unter Berücksichtigung der Ressourcen'],
     ['support', 'b) Einschätzung des Hilfebedarfs'],
-    ['goals', 'c) Rahmenziele'],
-    ['measures', 'd) Geplante Maßnahmen'],
+    ['goals', 'c) Rahmenziele für den Planungszeitraum'],
+    ['measures', 'd) Beschreibung der geplanten Maßnahmen'],
   ],
   B: [
     ['reflection', 'a) Reflexion der durchgeführten Maßnahmen'],
-    ['development', 'b) Entwicklung im Planungszeitraum unter Berücksichtigung der Ressourcen'],
+    ['development', 'b) Beschreibung der Entwicklung innerhalb des letzten Planungszeitraumes anhand der Rahmenziele unter Berücksichtigung der Ressourcen'],
     ['support', 'c) Einschätzung des Hilfebedarfs'],
     ['goals', 'd) Fortschreibung der Rahmenziele'],
-    ['measures', 'e) Geplante Maßnahmen'],
+    ['measures', 'e) Beschreibung der geplanten Maßnahmen'],
   ],
   C: [
-    ['reflection', 'a) Reflexion der durchgeführten Maßnahmen'],
-    ['development', 'b) Entwicklung unter Berücksichtigung der Ressourcen'],
-    ['remainingSupport', 'c) Noch bestehender Hilfebedarf'],
-    ['furtherMeasures', 'd) Weitere Maßnahmen'],
-    ['provider', 'e) Durch wen werden Maßnahmen erbracht'],
+    ['reflection', 'a) Reflexion der durchgeführten Maßnahmen im letzten Förderzeitraum'],
+    ['development', 'b) Beschreibung der Entwicklung anhand der Rahmenziele unter Berücksichtigung der Ressourcen'],
+    ['remainingSupport', 'c) Einschätzung des noch bestehenden Hilfebedarfs'],
+    ['furtherMeasures', 'd) Welche weiteren Maßnahmen sind vorgesehen'],
+    ['provider', 'e) Durch wen werden diese Maßnahmen erbracht'],
   ],
 };
 
 let enginePromise = null;
 let engineInstance = null;
 let modelInfo = null;
+let webllmModule = null;
+let appConfig = null;
 let modelState = {
   status: 'idle',
   percent: 0,
@@ -72,7 +66,7 @@ export function getLocalAiCapability() {
     supported: hasWebGPU,
     modelProfile: MODEL_PROFILE,
     modelLabel: MODEL_LABEL,
-    runtime: 'gemma-webgpu',
+    runtime: 'webllm',
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
@@ -85,19 +79,52 @@ export function isLocalAiReady() {
   return Boolean(engineInstance);
 }
 
-function mapLoadProgress(progress, onProgress) {
-  const loaded = Number(progress?.loaded || 0);
-  const total = Number(progress?.total || 0);
-  const rawPercent = total > 0 ? Math.round((loaded / total) * 100) : 0;
-  const percent = total > 0 ? Math.min(96, Math.max(4, rawPercent)) : 4;
-  const statusText = progress?.status || 'Sprachmodell wird geladen …';
+function mapInitProgress(report, onProgress, fromCache) {
+  const raw = Number(report?.progress ?? 0);
+  const percent = Math.min(96, Math.max(4, Math.round(raw * 100)));
+  const text = report?.text || (fromCache
+    ? 'Lokales Sprachmodell wird aus dem Gerätespeicher geladen …'
+    : 'Sprachmodell wird einmalig heruntergeladen und lokal gespeichert …');
 
   setModelState({
     status: 'loading',
     percent,
-    text: statusText,
+    text,
     error: null,
   }, onProgress);
+}
+
+async function prepareRuntime(onProgress) {
+  if (webllmModule && appConfig) return { webllm: webllmModule, appConfig };
+
+  setModelState({
+    status: 'loading',
+    percent: 3,
+    text: 'Lokale KI-Laufzeit wird vorbereitet …',
+    error: null,
+  }, onProgress);
+
+  const webllm = await import(WEBLLM_URL);
+  const config = {
+    ...webllm.prebuiltAppConfig,
+    cacheBackend: 'cache',
+    model_list: [...webllm.prebuiltAppConfig.model_list],
+  };
+
+  const supportedModel = config.model_list.some((entry) => entry.model_id === MODEL_KEY);
+  if (!supportedModel) {
+    throw new Error(`Das lokale Modell ${MODEL_KEY} wird von der geladenen WebLLM-Version nicht unterstützt.`);
+  }
+
+  try {
+    await navigator.storage?.persist?.();
+  } catch {
+    // Persistenz ist eine Optimierung; Safari kann die Anfrage ablehnen.
+  }
+
+  webllmModule = webllm;
+  appConfig = config;
+  return { webllm, appConfig: config };
 }
 
 async function loadEngine(onProgress) {
@@ -114,28 +141,28 @@ async function loadEngine(onProgress) {
 
   if (!enginePromise) {
     enginePromise = (async () => {
-      setModelState({
-        status: 'loading',
-        percent: 3,
-        text: IS_IOS
-          ? 'Für iPhone/iPad wird das speicherschonende mobile Sprachmodell vorbereitet …'
-          : 'Stärkeres lokales Sprachmodell wird vorbereitet …',
-        error: null,
-      }, onProgress);
+      const { webllm, appConfig: config } = await prepareRuntime(onProgress);
+      let cached = false;
 
-      const { createGemmaEngine } = await import(GEMMA_WEBGPU_URL);
+      try {
+        cached = await webllm.hasModelInCache(MODEL_KEY, config);
+      } catch {
+        cached = false;
+      }
 
       setModelState({
         status: 'loading',
         percent: 4,
-        text: `${MODEL_LABEL} wird in Abschnitten geladen …`,
+        text: cached
+          ? 'Gespeichertes Sprachmodell wird auf dem Gerät gestartet …'
+          : 'Sprachmodell wird beim ersten Start heruntergeladen und dauerhaft lokal zwischengespeichert …',
         error: null,
       }, onProgress);
 
-      const engine = await createGemmaEngine({
-        model: MODEL_KEY,
-        contextLength: CONTEXT_LENGTH,
-        onProgress: (progress) => mapLoadProgress(progress, onProgress),
+      const engine = await webllm.CreateMLCEngine(MODEL_KEY, {
+        appConfig: config,
+        initProgressCallback: (report) => mapInitProgress(report, onProgress, cached),
+        logLevel: 'WARN',
       });
 
       engineInstance = engine;
@@ -144,8 +171,8 @@ async function loadEngine(onProgress) {
         label: MODEL_LABEL,
         profile: MODEL_PROFILE,
         device: 'webgpu',
-        runtimeLabel: 'gemma-webgpu 0.1.0',
-        contextLength: CONTEXT_LENGTH,
+        runtimeLabel: 'WebLLM',
+        persistentCache: 'Cache API',
       };
 
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
@@ -176,14 +203,14 @@ export function preloadLocalAi(onProgress) {
 function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
   const instruction = getOutputInstruction(formType, sectionMode);
-  const rules = IS_IOS ? IOS_RULES : CORE_RULES;
 
-  return `${rules}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe:\n${instruction}\n\nFallbeschreibung:\n${notes}\n\nSchreibe nur den Inhalt dieses einen Unterpunkts, ohne Überschrift. Maximal ${IS_IOS ? 2 : 3} Sätze. Keine Vorbemerkung und keine Wiederholungen.`;
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe:\n${instruction}\n\nFallbeschreibung:\n${notes}\n\nFormuliere ausschließlich den Inhalt dieses Unterpunkts. 1 bis 3 vollständige Sätze, höchstens 80 Wörter. Verwende nur Informationen aus der Fallbeschreibung. Fehlen die notwendigen Angaben, antworte exakt mit: Hierzu liegen keine ausreichenden Angaben vor.`;
 }
 
 function normalizeOutput(text) {
-  return text
-    .replace(/<start_of_turn>|<end_of_turn>|<bos>|<eos>/gi, '')
+  return String(text || '')
+    .replace(/<\|im_start\|>|<\|im_end\|>|<bos>|<eos>/gi, '')
+    .replace(/^assistant\s*:?\s*/i, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -192,13 +219,16 @@ function isDegenerateOutput(text) {
   const cleaned = normalizeOutput(text);
   if (!cleaned) return true;
 
+  if (/\bHEBI?[-:]|HEB-(?:Bereich|Reise|Bereit|Beispiel)|Abstand\s*100\s*%/i.test(cleaned)) return true;
+  if (/\b(?:[A-Za-zÄÖÜäöüß]+-){3,}[A-Za-zÄÖÜäöüß]+\b/.test(cleaned)) return true;
+
   const lines = cleaned
     .split(/\n+/)
     .map((line) => line.trim().toLowerCase())
     .filter(Boolean);
   const lineCounts = new Map();
   for (const line of lines) lineCounts.set(line, (lineCounts.get(line) || 0) + 1);
-  if ([...lineCounts.values()].some((count) => count >= 3)) return true;
+  if ([...lineCounts.values()].some((count) => count >= 2)) return true;
 
   const words = cleaned.toLowerCase().match(/[a-zäöüß0-9-]+/g) || [];
   if (words.length >= 12) {
@@ -206,45 +236,40 @@ function isDegenerateOutput(text) {
     for (const word of words) counts.set(word, (counts.get(word) || 0) + 1);
     const mostCommon = Math.max(...counts.values());
     const uniqueRatio = counts.size / words.length;
-    if (mostCommon >= 6 || uniqueRatio < 0.34) return true;
+    if (mostCommon >= 6 || uniqueRatio < 0.38) return true;
   }
 
   return false;
 }
 
-async function runSection(engine, prompt, options) {
-  engine.resetConversation();
-  engine.addUserMessage(prompt);
+async function runSection(engine, prompt, strictRetry = false) {
+  const response = await engine.chat.completions.create({
+    stream: false,
+    messages: [
+      { role: 'system', content: CORE_RULES },
+      {
+        role: 'user',
+        content: strictRetry
+          ? `${prompt}\n\nPrüfe vor der Ausgabe: korrektes Deutsch, keine erfundenen Inhalte, keine Listen, keine HEB-Kürzel, keine Wortketten und keine Wiederholungen.`
+          : prompt,
+      },
+    ],
+    temperature: strictRetry ? 0.05 : 0.1,
+    top_p: 0.85,
+    repetition_penalty: strictRetry ? 1.2 : 1.12,
+    max_tokens: strictRetry ? 100 : 110,
+  });
 
-  let text = '';
-  try {
-    for await (const token of engine.generate(options)) text += token;
-  } finally {
-    engine.resetConversation();
-  }
-
-  return normalizeOutput(text);
+  return normalizeOutput(response?.choices?.[0]?.message?.content || '');
 }
 
 async function generateSection(engine, prompt) {
-  let text = await runSection(engine, prompt, {
-    temperature: IS_IOS ? 0.2 : 0.15,
-    topP: 0.9,
-    repPenalty: IS_IOS ? 1.3 : 1.22,
-    maxTokens: IS_IOS ? 70 : 90,
-  });
-
+  let text = await runSection(engine, prompt, false);
   if (!isDegenerateOutput(text)) return text;
 
-  text = await runSection(engine, `${prompt}\n\nWichtig: Keine Wort- oder Satzwiederholungen. Formuliere einen zusammenhängenden fachlichen Text.`, {
-    temperature: 0.3,
-    topP: 0.85,
-    repPenalty: IS_IOS ? 1.4 : 1.35,
-    maxTokens: IS_IOS ? 60 : 80,
-  });
-
+  text = await runSection(engine, prompt, true);
   if (isDegenerateOutput(text)) {
-    throw new Error('Die lokale KI ist in eine Wiederholungsschleife geraten. Der Entwurf wurde verworfen statt als fehlerhafter HEB-Text angezeigt.');
+    throw new Error('Die lokale KI hat keinen sprachlich verwertbaren HEB-Text erzeugt. Der fehlerhafte Entwurf wurde verworfen.');
   }
 
   return text;
