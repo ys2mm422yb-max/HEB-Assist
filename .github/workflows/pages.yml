@@ -10,11 +10,13 @@ on:
       - 'bootstrap.js'
       - 'app.js'
       - 'ai-engine.js'
+      - 'evidence-pipeline.js'
       - 'privacy-filter.js'
       - 'heb-knowledge.js'
       - 'manifest.webmanifest'
       - 'icon.svg'
       - 'sw.js'
+      - 'tests/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -36,6 +38,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check bootstrap.js
+          node --check app.js
+          node --check ai-engine.js
+          node --check evidence-pipeline.js
+          node --check privacy-filter.js
+          node --check heb-knowledge.js
+          node --check sw.js
+
+      - name: Run synthetic evidence regression tests
+        run: node tests/evidence-pipeline.test.mjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
