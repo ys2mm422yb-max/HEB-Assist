@@ -2,6 +2,8 @@ import { HEB_SYSTEM_RULES, HEB_FORM_CONFIG, getOutputInstruction, FEW_SHOT_EXAMP
 
 const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+const ORT_WEB_VERSION = '1.26.0-dev.20260416-b7804b056c';
+const ORT_ASYNCIFY_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WEB_VERSION}/dist/`;
 
 let generatorPromise = null;
 let generatorInstance = null;
@@ -18,11 +20,22 @@ function setModelState(next, onProgress) {
   onProgress?.({ ...modelState });
 }
 
+function isSafari26Plus() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const vendor = navigator.vendor || '';
+  const isSafari = vendor.includes('Apple') && !/CriOS|FxiOS|EdgiOS|OPiOS|mercury|brave|Chrome|Android/i.test(ua);
+  if (!isSafari) return false;
+  const match = ua.match(/Version\/(\d+)/);
+  return match ? Number.parseInt(match[1], 10) >= 26 : false;
+}
+
 export function getLocalAiCapability() {
   const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
   return {
     hasWebGPU,
     supported: hasWebGPU,
+    safari26Plus: isSafari26Plus(),
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
@@ -35,14 +48,29 @@ export function isLocalAiReady() {
   return Boolean(generatorInstance);
 }
 
-async function chooseDtype() {
-  try {
-    const adapter = await navigator.gpu.requestAdapter();
-    if (adapter?.features?.has('shader-f16')) return 'q4f16';
-  } catch {
-    // q4 remains the safer fallback.
+function configureRuntimeForPlatform(env) {
+  if (!env) return;
+
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+
+  // Transformers.js 4.2.0 predates the upstream Safari-26 WebGPU fix
+  // (huggingface/transformers.js#1700). Safari >= 26 needs the asyncify
+  // ONNX Runtime Web build for the WebGPU backend to initialise correctly.
+  if (isSafari26Plus() && env.backends?.onnx?.wasm) {
+    env.backends.onnx.wasm.wasmPaths = {
+      mjs: `${ORT_ASYNCIFY_BASE}ort-wasm-simd-threaded.asyncify.mjs`,
+      wasm: `${ORT_ASYNCIFY_BASE}ort-wasm-simd-threaded.asyncify.wasm`,
+    };
   }
-  return 'q4';
+}
+
+async function chooseDtype() {
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    throw new Error('WebGPU ist vorhanden, aber Safari konnte keinen GPU-Adapter bereitstellen.');
+  }
+  return adapter.features?.has('shader-f16') ? 'q4f16' : 'q4';
 }
 
 async function loadGenerator(onProgress) {
@@ -53,7 +81,7 @@ async function loadGenerator(onProgress) {
 
   if (!getLocalAiCapability().supported) {
     const error = new Error('Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.');
-    setModelState({ status: 'fallback', percent: 0, text: 'Schneller Modus aktiv', error: error.message }, onProgress);
+    setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: error.message }, onProgress);
     throw error;
   }
 
@@ -61,11 +89,7 @@ async function loadGenerator(onProgress) {
     generatorPromise = (async () => {
       setModelState({ status: 'loading', percent: 3, text: 'KI-Bibliothek wird geladen …', error: null }, onProgress);
       const { pipeline, env } = await import(TRANSFORMERS_URL);
-
-      if (env) {
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-      }
+      configureRuntimeForPlatform(env);
 
       const dtype = await chooseDtype();
       setModelState({ status: 'loading', percent: 8, text: 'Sprachmodell wird vorbereitet …' }, onProgress);
@@ -97,17 +121,18 @@ async function loadGenerator(onProgress) {
       });
 
       generatorInstance = pipe;
-      modelInfo = { id: MODEL_ID, dtype, device: 'webgpu' };
+      modelInfo = { id: MODEL_ID, dtype, device: 'webgpu', safari26Workaround: isSafari26Plus() };
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
       return pipe;
     })().catch((error) => {
       generatorPromise = null;
       generatorInstance = null;
+      const message = error?.message || String(error);
       setModelState({
-        status: 'fallback',
+        status: 'error',
         percent: 0,
-        text: 'Schneller Modus aktiv',
-        error: error?.message || String(error),
+        text: 'KI nicht verfügbar',
+        error: message,
       }, onProgress);
       throw error;
     });
