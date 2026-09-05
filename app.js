@@ -7,6 +7,18 @@ import {
   preloadLocalAi,
 } from './ai-engine.js';
 
+const appShell = document.querySelector('#appShell');
+const startupGate = document.querySelector('#startupGate');
+const startupTitle = document.querySelector('#startupTitle');
+const startupText = document.querySelector('#startupText');
+const startupProgressTrack = document.querySelector('#startupProgressTrack');
+const startupProgressBar = document.querySelector('#startupProgressBar');
+const startupPercent = document.querySelector('#startupPercent');
+const startupStage = document.querySelector('#startupStage');
+const startupError = document.querySelector('#startupError');
+const startupErrorText = document.querySelector('#startupErrorText');
+const startupRetryButton = document.querySelector('#startupRetryButton');
+
 const reportType = document.querySelector('#reportType');
 const formHint = document.querySelector('#formHint');
 const area = document.querySelector('#area');
@@ -59,9 +71,80 @@ function setAiInputEnabled(enabled) {
   notes.placeholder = enabled ? READY_PLACEHOLDER : LOADING_PLACEHOLDER;
 }
 
+function showStartupGate() {
+  startupGate.classList.remove('startup-gate-hidden');
+  startupGate.setAttribute('aria-hidden', 'false');
+  startupGate.setAttribute('aria-busy', 'true');
+  appShell.setAttribute('inert', '');
+  appShell.setAttribute('aria-hidden', 'true');
+  document.body.classList.add('startup-locked');
+}
+
+function hideStartupGate() {
+  startupGate.classList.add('startup-gate-hidden');
+  startupGate.setAttribute('aria-hidden', 'true');
+  startupGate.setAttribute('aria-busy', 'false');
+  appShell.removeAttribute('inert');
+  appShell.removeAttribute('aria-hidden');
+  document.body.classList.remove('startup-locked');
+}
+
+function updateStartupStatus(status = {}, percent = 0) {
+  if (status.status === 'generating') return;
+
+  if (status.status === 'ready') {
+    startupProgressBar.style.width = '100%';
+    startupProgressTrack.setAttribute('aria-valuenow', '100');
+    startupPercent.textContent = '100 %';
+    startupStage.textContent = 'KI ist bereit';
+    startupTitle.textContent = 'Lokale KI ist bereit';
+    startupText.textContent = 'HEB Assist kann jetzt verwendet werden.';
+    startupError.hidden = true;
+    startupRetryButton.hidden = true;
+    window.setTimeout(hideStartupGate, 180);
+    return;
+  }
+
+  showStartupGate();
+
+  if (status.status === 'error') {
+    startupTitle.textContent = 'KI konnte nicht gestartet werden';
+    startupText.textContent = 'HEB Assist bleibt gesperrt, bis die lokale KI erfolgreich gestartet wurde.';
+    startupProgressTrack.hidden = true;
+    startupPercent.textContent = '—';
+    startupStage.textContent = 'Start fehlgeschlagen';
+    startupErrorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.';
+    startupError.hidden = false;
+    startupRetryButton.hidden = false;
+    return;
+  }
+
+  startupProgressTrack.hidden = false;
+  startupProgressBar.style.width = `${Math.max(3, percent)}%`;
+  startupProgressTrack.setAttribute('aria-valuenow', String(Math.round(percent)));
+  startupPercent.textContent = `${Math.round(percent)} %`;
+  startupError.hidden = true;
+  startupErrorText.textContent = '';
+  startupRetryButton.hidden = true;
+
+  if (status.status === 'loading') {
+    const starting = percent >= 97;
+    startupTitle.textContent = starting ? 'Lokale KI wird gestartet' : 'Lokale KI wird geladen';
+    startupText.textContent = starting
+      ? 'Der Download ist abgeschlossen. Das Sprachmodell wird jetzt auf dem Gerät initialisiert.'
+      : 'Das Sprachmodell wird direkt auf diesem Gerät vorbereitet.';
+    startupStage.textContent = status.text || 'KI-Dateien werden geladen …';
+  } else {
+    startupTitle.textContent = 'Lokale KI wird vorbereitet';
+    startupText.textContent = 'Das Sprachmodell wird direkt auf diesem Gerät gestartet.';
+    startupStage.textContent = 'Vorbereitung läuft …';
+  }
+}
+
 function updateEngineStatus(status = {}) {
   const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, status.percent)) : 0;
   engineProgressBar.style.width = `${Math.max(3, percent)}%`;
+  updateStartupStatus(status, percent);
 
   engineBadge.classList.remove('loading', 'ready', 'warning');
 
@@ -89,6 +172,15 @@ function updateEngineStatus(status = {}) {
     return;
   }
 
+  if (status.status === 'generating') {
+    setAiInputEnabled(false);
+    engineBadge.textContent = 'KI formuliert …';
+    engineBadge.classList.add('loading');
+    engineProgressTrack.hidden = true;
+    engineStatusText.textContent = 'Die lokale KI erstellt den HEB-Entwurf.';
+    return;
+  }
+
   setAiInputEnabled(false);
   engineBadge.classList.add('loading');
   engineProgressTrack.hidden = false;
@@ -99,10 +191,6 @@ function updateEngineStatus(status = {}) {
   if (status.status === 'loading') {
     engineBadge.textContent = percent > 0 ? `KI lädt · ${Math.round(percent)}%` : 'KI wird geladen …';
     engineStatusText.textContent = status.text || 'Das lokale Sprachmodell wird geladen. Die Eingabe bleibt bis zum vollständigen Start gesperrt.';
-  } else if (status.status === 'generating') {
-    engineBadge.textContent = 'KI formuliert …';
-    engineProgressTrack.hidden = true;
-    engineStatusText.textContent = 'Die lokale KI erstellt den HEB-Entwurf.';
   } else {
     engineBadge.textContent = 'KI wird vorbereitet …';
     engineStatusText.textContent = 'Das lokale Sprachmodell wird automatisch vorbereitet. Die Eingabe bleibt bis zum vollständigen Start gesperrt.';
@@ -124,7 +212,7 @@ async function startLocalAi() {
 
 function validateInput() {
   if (!isLocalAiReady()) {
-    setResult('Die lokale KI ist noch nicht einsatzbereit. Bitte warte, bis oben rechts „KI ist bereit ✓“ angezeigt wird.', 'error');
+    setResult('Die lokale KI ist noch nicht einsatzbereit.', 'error');
     return null;
   }
 
@@ -255,7 +343,7 @@ generateButton.addEventListener('click', async () => {
       text: 'KI nicht verfügbar',
       error: error?.message || String(error),
     });
-    setResult('Die lokale KI ist ausgefallen. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet. Öffne „Technik & Datenschutz“ für die technische Fehlermeldung und versuche anschließend „KI erneut starten“.', 'error');
+    setResult('Die lokale KI ist ausgefallen. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet.', 'error');
   } finally {
     generateButton.disabled = !isLocalAiReady();
   }
@@ -280,6 +368,7 @@ retryAiButton.addEventListener('click', () => {
   detailsDialog.close();
   startLocalAi();
 });
+startupRetryButton.addEventListener('click', startLocalAi);
 detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
