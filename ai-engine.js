@@ -1,8 +1,7 @@
 import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
 
-// Llama 3.2 1B is officially multilingual (including German) and the WebLLM
-// q4f16 build is marked as low-resource. It needs far less VRAM than the
-// previous Qwen 2.5 1.5B build, which crashed Safari during generation.
+// Low-memory multilingual model for iOS/Safari. HEB Assist is a social-
+// psychiatric documentation aid, not a nursing documentation generator.
 const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.82';
 const MODEL_KEY = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
 const MODEL_LABEL = 'Llama 3.2 1B Instruct';
@@ -13,6 +12,8 @@ const CORE_RULES = `Du bist HEB Assist. Du formulierst professionelle HEB-Texte 
 
 Verbindliche Regeln:
 - Nutze ausschließlich Angaben aus der Fallbeschreibung. Nichts erfinden, vermuten oder fachlich dazudichten.
+- HEB Assist ist kein Pflegebericht. Verwende pflegerische oder medizinische Begriffe nur, wenn sie in der Fallbeschreibung tatsächlich vorkommen und für den gewählten HEB-Bereich relevant sind.
+- Im Bereich Selbstversorgung / Wohnen können z. B. Haushaltsführung, Einkaufen, Finanzen, Wohnraum, Alltagsorganisation und eigenständige Lebensführung relevant sein. Körperpflege darf niemals automatisch angenommen werden.
 - Alltagsformulierungen sind verwertbare Angaben; sie müssen nicht ausdrücklich als Ressource, Hilfebedarf, Ziel oder Maßnahme bezeichnet sein.
 - Keine Diagnosen, Ursachen, Symptome, Risiken, Fähigkeiten, Entwicklungen, Ziele, Maßnahmen, Hilfebedarfe oder Anbieter ergänzen, die nicht aus der Eingabe hervorgehen.
 - Schreibe korrektes, natürliches, professionelles Deutsch: sachlich, wertschätzend, ressourcenorientiert und personenzentriert.
@@ -20,7 +21,9 @@ Verbindliche Regeln:
 - Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
 - Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
 - Keine Überschriften, Listen, Nummerierungen, Markdown, Fantasiewörter, künstlichen Fachbegriffe oder Meta-Kommentare in der eigentlichen Antwort.
+- Wiederhole die Fallbeschreibung nicht vollständig. Verdichte nur die für den angeforderten Unterpunkt relevanten Informationen.
 - Antworte nur mit dem fertigen Fließtext für genau den angeforderten HEB-Unterpunkt.
+- Jeder ausgegebene Text muss mit einem vollständigen Satz enden. Niemals mitten im Wort oder Satz abbrechen.
 - Wenn die Informationen für diesen Unterpunkt wirklich fehlen, antworte exakt: „Hierzu liegen keine ausreichenden Angaben vor.“`;
 
 const SECTION_MODES = {
@@ -46,11 +49,38 @@ const SECTION_MODES = {
   ],
 };
 
+// Conservative target lengths based on the compact field layout of the
+// official HEB A/B/C forms. They are intentionally different by subsection.
+// The generation token budget is larger than the requested text length so a
+// response can finish its final sentence instead of being cut off.
+const SECTION_LENGTHS = {
+  A: {
+    current: { maxWords: 45, sentences: '2 bis 3' },
+    support: { maxWords: 32, sentences: '1 bis 2' },
+    goals: { maxWords: 28, sentences: '1 bis 2' },
+    measures: { maxWords: 36, sentences: '1 bis 2' },
+  },
+  B: {
+    reflection: { maxWords: 42, sentences: '2 bis 3' },
+    development: { maxWords: 48, sentences: '2 bis 3' },
+    support: { maxWords: 30, sentences: '1 bis 2' },
+    goals: { maxWords: 28, sentences: '1 bis 2' },
+    measures: { maxWords: 36, sentences: '1 bis 2' },
+  },
+  C: {
+    reflection: { maxWords: 42, sentences: '2 bis 3' },
+    development: { maxWords: 46, sentences: '2 bis 3' },
+    remainingSupport: { maxWords: 30, sentences: '1 bis 2' },
+    furtherMeasures: { maxWords: 34, sentences: '1 bis 2' },
+    provider: { maxWords: 18, sentences: '1' },
+  },
+};
+
 const GUIDANCE = {
-  current: 'Beschreibe die aktuelle Alltagssituation. Stelle Ressourcen und Schwierigkeiten nachvollziehbar gegenüber. Genannte Unterstützung darf als Teil der aktuellen Situation erwähnt werden, aber nicht erweitert werden.',
-  support: 'Beschreibe konkret, wobei Unterstützung nötig ist und was selbstständig gelingt. Verbale Erinnerung, gemeinsames Planen oder ausdrücklich genannte Unterstützung sind direkte Hinweise. Keine Hilfebedarfsstufe wählen.',
-  goals: 'Formuliere nur eine unmittelbar aus der beschriebenen Situation ableitbare Zielrichtung. Zulässig sind vorsichtige Formulierungen zu Erhalt, Stabilisierung oder Weiterentwicklung genau der beschriebenen Selbstständigkeit. Keine neuen Lebensbereiche, Zeitangaben oder Erfolgsversprechen.',
-  measures: 'Formuliere ausschließlich bereits beschriebene Unterstützungsformen als geplante Maßnahmen. Verbale Erinnerung darf als verbaler Impuls, gemeinsames Planen als gemeinsame Planung formuliert werden. Keine neuen Methoden, Häufigkeiten oder Personen ergänzen.',
+  current: 'Verdichte die aktuelle Alltagssituation. Stelle die wichtigsten Ressourcen und Schwierigkeiten nachvollziehbar gegenüber. Nenne nur Unterstützung, die zum Verständnis der aktuellen Situation nötig ist.',
+  support: 'Beschreibe knapp, wobei Unterstützung nötig ist und was selbstständig gelingt. Keine Fallbeschreibung wiederholen und keine Hilfebedarfsstufe wählen.',
+  goals: 'Formuliere nur die Zielrichtung, nicht erneut die Ausgangssituation. Zulässig sind vorsichtige Ziele zu Erhalt, Stabilisierung oder Weiterentwicklung genau der beschriebenen Selbstständigkeit. Keine neuen Inhalte ergänzen.',
+  measures: 'Nenne ausschließlich die bereits beschriebenen Unterstützungsformen als konkrete Maßnahmen. Wiederhole nicht nochmals die gesamte Ausgangssituation. Keine neuen Methoden, Häufigkeiten oder Personen ergänzen.',
   reflection: 'Reflektiere nur tatsächlich genannte durchgeführte Maßnahmen und deren beschriebenen Verlauf oder Wirkung. Fehlen Verlauf oder Maßnahmen, sage, dass keine ausreichenden Angaben vorliegen.',
   development: 'Beschreibe nur ausdrücklich erkennbare Entwicklung, Stabilität oder Verschlechterung im Zeitraum. Ohne zeitlichen Vergleich keine Entwicklung erfinden.',
   remainingSupport: 'Beschreibe ausschließlich den ausdrücklich noch bestehenden Unterstützungsbedarf. Keine Hilfebedarfsstufe ergänzen.',
@@ -58,11 +88,11 @@ const GUIDANCE = {
   provider: 'Nenne nur den ausdrücklich genannten Erbringer. Fehlt er, sage knapp, dass hierzu keine Angabe vorliegt.',
 };
 
-const EXAMPLES = {
-  current: 'Stilbeispiel: „Die Person benötigt zur Aufnahme der Körperpflege häufig einen verbalen Impuls. Nach erfolgter Erinnerung führt sie die Körperpflege überwiegend selbstständig durch. Bei Einkäufen wählt sie benötigte Produkte selbstständig aus.“',
-  support: 'Stilbeispiel: „Zur Initiierung der Körperpflege sind bedarfsorientierte verbale Impulse erforderlich. Bei der Einkaufsplanung und beim Überblick über verfügbare finanzielle Mittel besteht Unterstützungsbedarf; die Produktauswahl gelingt selbstständig.“',
-  goals: 'Stilbeispiel: „Die vorhandene Selbstständigkeit bei der Körperpflege und der Produktauswahl soll erhalten und weiter gestärkt werden. Im Umgang mit den verfügbaren finanziellen Mitteln soll die eigenständige Übersicht gefördert werden.“',
-  measures: 'Stilbeispiel: „Bei Bedarf werden verbale Impulse zur Aufnahme der Körperpflege gegeben. Einkäufe werden gemeinsam geplant; beim Überblick über die verfügbaren finanziellen Mittel erfolgt Unterstützung.“',
+const STYLE_EXAMPLES = {
+  current: 'Stilbeispiel ohne Pflegebezug: „Die Person plant Einkäufe nach gemeinsamer Strukturierung zunehmend selbstständig und wählt benötigte Produkte eigenständig aus. Beim Überblick über die verfügbaren finanziellen Mittel besteht weiterhin Unterstützungsbedarf.“',
+  support: 'Stilbeispiel ohne Pflegebezug: „Bei der Einkaufsplanung und beim Überblick über verfügbare finanzielle Mittel besteht Unterstützungsbedarf; die Auswahl benötigter Produkte gelingt selbstständig.“',
+  goals: 'Stilbeispiel ohne Pflegebezug: „Die vorhandene Selbstständigkeit bei der Alltagsorganisation soll erhalten und die eigenständige Übersicht über verfügbare finanzielle Mittel weiterentwickelt werden.“',
+  measures: 'Stilbeispiel ohne Pflegebezug: „Einkäufe werden bei Bedarf gemeinsam strukturiert; beim Überblick über die verfügbaren finanziellen Mittel erfolgt unterstützende Rückmeldung.“',
 };
 
 let enginePromise = null;
@@ -206,13 +236,21 @@ export function preloadLocalAi(onProgress) {
   return loadEngine(onProgress);
 }
 
-function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel }) {
+function getLengthProfile(formType, sectionMode) {
+  return SECTION_LENGTHS[formType]?.[sectionMode] || { maxWords: 35, sentences: '1 bis 2' };
+}
+
+function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel, strictRetry = false }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
   const instruction = getOutputInstruction(formType, sectionMode);
   const guidance = GUIDANCE[sectionMode] || '';
-  const example = EXAMPLES[sectionMode] || '';
+  const example = STYLE_EXAMPLES[sectionMode] || '';
+  const length = getLengthProfile(formType, sectionMode);
+  const retryHint = strictRetry
+    ? '\nDie vorige Antwort war zu lang, unvollständig oder sprachlich unbrauchbar. Formuliere deutlich kompakter und beende jeden Satz vollständig.'
+    : '';
 
-  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe: ${instruction}\n${guidance}\n${example}\n\nFallbeschreibung:\n${notes}\n\nFormuliere nur den Inhalt dieses Unterpunkts. Schreibe 1 bis 3 vollständige Sätze mit höchstens 75 Wörtern. Keine Überschrift, keine Liste, keine Nummerierung und kein Markdown.`;
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe: ${instruction}\n${guidance}\n${example}\n\nFallbeschreibung:\n${notes}\n\nFormuliere ausschließlich den Inhalt dieses Unterpunkts. Verdichte statt zu wiederholen. Umfang: ${length.sentences} vollständige Sätze, höchstens ${length.maxWords} Wörter. Der letzte Satz muss vollständig mit Satzzeichen enden. Keine Überschrift, keine Liste, keine Nummerierung und kein Markdown.${retryHint}`;
 }
 
 function normalizeOutput(text) {
@@ -221,6 +259,16 @@ function normalizeOutput(text) {
     .replace(/^assistant\s*:?\s*/i, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function wordCount(text) {
+  return (normalizeOutput(text).match(/\S+/g) || []).length;
+}
+
+function endsWithCompleteSentence(text) {
+  const cleaned = normalizeOutput(text);
+  if (!cleaned) return false;
+  return /[.!?…][”"']?$/.test(cleaned);
 }
 
 function isMissingOutput(text) {
@@ -269,35 +317,41 @@ function isDegenerateOutput(text) {
   return false;
 }
 
+function isSectionInvalid(text, context) {
+  const length = getLengthProfile(context.formType, context.sectionMode);
+  if (isDegenerateOutput(text)) return true;
+  if (!isMissingOutput(text) && !endsWithCompleteSentence(text)) return true;
+  if (!isMissingOutput(text) && wordCount(text) > length.maxWords + 6) return true;
+  if (shouldContainContent(context) && isMissingOutput(text)) return true;
+  return false;
+}
+
 async function runSection(engine, prompt, strictRetry = false) {
   const response = await engine.chat.completions.create({
     stream: false,
     messages: [
       { role: 'system', content: CORE_RULES },
-      {
-        role: 'user',
-        content: strictRetry
-          ? `${prompt}\n\nDie erste Antwort war unbrauchbar. Lies die Fallbeschreibung erneut genau. Formuliere ausschließlich natürliches, korrektes deutsches HEB-Deutsch. Keine Fantasiewörter, keine erfundenen Inhalte, keine Listen und keine Markdown-Zeichen.`
-          : prompt,
-      },
+      { role: 'user', content: prompt },
     ],
     temperature: strictRetry ? 0 : 0.05,
     top_p: 0.9,
     repetition_penalty: strictRetry ? 1.16 : 1.08,
-    max_tokens: 96,
+    // Larger than the requested word limits on purpose: generation must have
+    // enough room to finish the last sentence. Length is enforced separately.
+    max_tokens: strictRetry ? 144 : 160,
   });
   return normalizeOutput(response?.choices?.[0]?.message?.content || '');
 }
 
-async function generateSection(engine, prompt, context) {
+async function generateSection(engine, baseContext) {
+  let prompt = buildSectionPrompt({ ...baseContext, strictRetry: false });
   let text = await runSection(engine, prompt, false);
-  let invalid = isDegenerateOutput(text) || (shouldContainContent(context) && isMissingOutput(text));
-  if (!invalid) return text;
+  if (!isSectionInvalid(text, baseContext)) return text;
 
+  prompt = buildSectionPrompt({ ...baseContext, strictRetry: true });
   text = await runSection(engine, prompt, true);
-  invalid = isDegenerateOutput(text) || (shouldContainContent(context) && isMissingOutput(text));
-  if (invalid) {
-    throw new Error('Die lokale KI hat keinen fachlich und sprachlich verwertbaren Text erzeugt. Der fehlerhafte Entwurf wurde verworfen.');
+  if (isSectionInvalid(text, baseContext)) {
+    throw new Error('Die lokale KI hat keinen vollständig formulierten, fachlich verwertbaren und ausreichend kompakten Text erzeugt. Der Entwurf wurde verworfen.');
   }
   return text;
 }
@@ -316,8 +370,13 @@ export async function generateHebText({ notes, area, formType, mode = 'complete'
       error: null,
     }, onProgress);
 
-    const prompt = buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel });
-    const sectionText = await generateSection(engine, prompt, { notes, formType, sectionMode });
+    const sectionText = await generateSection(engine, {
+      notes,
+      area,
+      formType,
+      sectionMode,
+      sectionLabel,
+    });
     outputs.push(`${sectionLabel}\n${sectionText}`);
   }
 
