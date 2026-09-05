@@ -127,13 +127,36 @@ export function isLocalAiReady() {
   return Boolean(engineInstance);
 }
 
+function germanLoadingText(report, fromCache, percent) {
+  const rawText = String(report?.text || '').toLowerCase();
+  const isStarting = percent >= 90 || /compile|compiling|shader|gpu|initializ|instantiate|loading model/.test(rawText);
+
+  if (fromCache) {
+    return isStarting
+      ? 'Gespeichertes Sprachmodell wird auf dem Gerät gestartet …'
+      : 'Gespeichertes Sprachmodell wird aus dem Gerätespeicher geladen …';
+  }
+
+  if (isStarting) {
+    return 'Sprachmodell wird auf dem Gerät gestartet …';
+  }
+
+  if (/cache|caching|store|saving/.test(rawText)) {
+    return 'Sprachmodell wird lokal auf dem Gerät gespeichert …';
+  }
+
+  return 'Sprachmodell wird heruntergeladen und lokal gespeichert …';
+}
+
 function mapInitProgress(report, onProgress, fromCache) {
   const raw = Number(report?.progress ?? 0);
   const percent = Math.min(96, Math.max(4, Math.round(raw * 100)));
-  const fallbackText = fromCache
-    ? 'Gespeichertes Sprachmodell wird auf dem Gerät gestartet …'
-    : 'Sprachmodell wird einmalig heruntergeladen und lokal gespeichert …';
-  setModelState({ status: 'loading', percent, text: report?.text || fallbackText, error: null }, onProgress);
+  setModelState({
+    status: 'loading',
+    percent,
+    text: germanLoadingText(report, fromCache, percent),
+    error: null,
+  }, onProgress);
 }
 
 async function prepareRuntime(onProgress) {
