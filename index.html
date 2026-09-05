@@ -28,6 +28,14 @@
 
     <section class="workspace">
       <div class="panel input-panel">
+        <label for="reportType">HEB-Bogen</label>
+        <select id="reportType">
+          <option value="A">A – Vorläufige Hilfeplanung</option>
+          <option value="B">B – Entwicklungsbericht</option>
+          <option value="C">C – Abschlussbericht</option>
+        </select>
+        <p id="formHint" class="quality-note">Für Neuaufnahmen: aktuelle Situation/Problemlage, Hilfebedarf, Rahmenziele und geplante Maßnahmen.</p>
+
         <label for="area">HEB-Bereich</label>
         <select id="area">
           <option>1. Aufnahme und Gestaltung persönlicher, sozialer Beziehungen</option>
@@ -45,13 +53,8 @@
         </div>
 
         <fieldset>
-          <legend>Ausgabe</legend>
-          <div class="choice-grid">
-            <label><input type="radio" name="mode" value="complete" checked /> Gesamtformulierung</label>
-            <label><input type="radio" name="mode" value="resources" /> Ressourcen</label>
-            <label><input type="radio" name="mode" value="support" /> Unterstützungsbedarf</label>
-            <label><input type="radio" name="mode" value="goal" /> Ziel + Maßnahmen</label>
-          </div>
+          <legend>Ausgabe passend zum gewählten HEB-Bogen</legend>
+          <div id="choiceGrid" class="choice-grid"></div>
         </fieldset>
 
         <div id="privacyResult" class="privacy-result" hidden></div>
