@@ -42,3 +42,12 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - Datenschutzfilter mit Positiv- und Negativtests absichern.
 - Kernworkflow muss ohne Benutzerkonto funktionieren.
 - Produktivfreigabe erst nach gesonderter fachlicher und datenschutzrechtlicher Prüfung.
+
+## 7. Automatische App-Updates
+
+- HEB-Assist muss neue veröffentlichte Versionen automatisch erkennen und übernehmen.
+- Beim Öffnen, beim Zurückkehren in die App und während längerer Nutzung wird automatisch nach Updates gesucht.
+- App-Code wird online bevorzugt frisch geladen; der Cache dient als Offline-Fallback und darf keine veraltete Version dauerhaft festhalten.
+- Ein Update darf keine aktive HEB-Eingabe oder noch nicht kopierte Ausgabe durch einen erzwungenen Neustart verlieren lassen.
+- Wenn während aktiver Arbeit eine neue Version bereitsteht, wird sie automatisch beim nächsten sicheren Zeitpunkt bzw. beim nächsten frischen Öffnen übernommen.
+- Kolleginnen und Kollegen sollen weder Cache leeren noch die PWA neu installieren müssen, um eine neue Version zu erhalten.
