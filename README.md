@@ -50,3 +50,5 @@ Beim ersten KI-Start werden Transformers.js und die Modell-Dateien aus dem Inter
 Bootstrap/Prototyp. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.**
 
 Der nächste harte Qualitätsschritt ist ein echter Gerätetest auf iPhone und Android mit vollständig fiktiven Testfällen. Erst danach wird entschieden, ob das lokale Modell fachlich stark genug ist oder ausgetauscht werden muss.
+
+Netlify ist für den Testbetrieb auf den Feature-Branch `feature/bootstrap-pwa-local-ai-v1` konfiguriert. Dieser Commit dient zugleich als erster automatischer Deploy-Trigger für den mobilen Gerätetest.
