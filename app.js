@@ -436,13 +436,25 @@ generateButton.addEventListener('click', async () => {
     updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
   } catch (error) {
     console.warn('Local AI generation failed:', error?.message || error);
-    updateEngineStatus({
-      status: 'error',
-      percent: 0,
-      text: 'KI nicht verfügbar',
-      error: error?.message || String(error),
-    });
-    setResult('Die lokale KI ist ausgefallen. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet.', 'error');
+
+    if (isLocalAiReady()) {
+      updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
+      const qualityRejected = error?.code === 'QUALITY_REJECTED' || /qualitätsprüfung|verworfen/i.test(error?.message || '');
+      setResult(
+        qualityRejected
+          ? 'Der erzeugte Text hat die Qualitätsprüfung nicht bestanden und wurde verworfen. Die lokale KI ist weiterhin einsatzbereit. Bitte den Entwurf erneut erstellen.'
+          : 'Beim Formulieren ist ein Fehler aufgetreten. Die lokale KI ist weiterhin einsatzbereit. Bitte den Entwurf erneut erstellen.',
+        'error',
+      );
+    } else {
+      updateEngineStatus({
+        status: 'error',
+        percent: 0,
+        text: 'KI nicht verfügbar',
+        error: error?.message || String(error),
+      });
+      setResult('Die lokale KI konnte während der Verarbeitung nicht weiterarbeiten. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet.', 'error');
+    }
   } finally {
     generateButton.disabled = !isLocalAiReady();
   }
