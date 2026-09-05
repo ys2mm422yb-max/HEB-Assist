@@ -263,6 +263,16 @@ function normalizeOutput(text) {
     .trim();
 }
 
+function normalizeClassifierOutput(text) {
+  return String(text || '')
+    .replace(/<\|im_start\|>|<\|im_end\|>|<bos>|<eos>/gi, '')
+    .replace(/^assistant\s*:?\s*/i, '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 function wordCount(text) {
   return (String(text || '').trim().match(/\S+/g) || []).length;
 }
@@ -333,7 +343,7 @@ async function runClassifier(engine, prompt, strict = false) {
     repetition_penalty: 1.04,
     max_tokens: strict ? 88 : 104,
   });
-  return normalizeOutput(response?.choices?.[0]?.message?.content || '');
+  return normalizeClassifierOutput(response?.choices?.[0]?.message?.content || '');
 }
 
 async function classifyEvidence(engine, { notes, units, formType, onProgress }) {
