@@ -12,7 +12,7 @@ Mitarbeitende beschreiben eine Situation in normaler Alltagssprache. HEB-Assist 
 - **Mobile first:** iPhone, Android und Desktop werden als gleichwertige Zielplattformen behandelt.
 - **Datensparsamkeit:** Version 1 benötigt keine zentrale Datenbank und keine Benutzerkonten.
 - **Keine Fallablage:** HEB-Eingaben und Ausgaben werden standardmäßig nicht zentral gespeichert.
-- **Lokale Verarbeitung:** Der normale Schnellmodus verarbeitet die Eingabe vollständig im Browser auf dem Endgerät.
+- **Lokale Verarbeitung:** Sowohl Schnellmodus als auch lokales Sprachmodell arbeiten auf dem Endgerät.
 - **Identifizierende Daten blockieren:** Typische direkte Identifikatoren werden vor der Verarbeitung lokal geprüft und bei Treffern blockiert.
 - **Keine erfundenen Tatsachen:** Diagnosen, Fähigkeiten, Einschränkungen, Ereignisse, Entwicklungen, Ziele oder Unterstützungsbedarfe dürfen nicht frei ergänzt werden.
 - **Fachliche Trennung:** Beobachtung, Selbstaussage und fachliche Einschätzung werden nicht vermischt.
@@ -32,16 +32,20 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 
 - statische HTML/CSS/JavaScript-Web-App ohne Backend
 - Progressive Web App mit Service Worker und App-Shell-Cache
-- normaler Schnellmodus ohne großes Modell und ohne KI-Server
+- sofort nutzbarer lokaler Schnellmodus
+- stärkeres lokales Sprachmodell (`onnx-community/Qwen2.5-0.5B-Instruct`) wird nach dem Öffnen automatisch im Hintergrund vorbereitet
+- klar sichtbarer KI-Status mit Ladefortschritt, Bereitschaft oder Fallback-Zustand
+- wenn das Sprachmodell noch lädt oder fehlschlägt, blockiert es die App nicht: Entwürfe werden sofort im Schnellmodus erstellt
+- sobald „KI ist bereit ✓“ angezeigt wird, werden neue Entwürfe mit dem stärkeren lokalen Sprachmodell erstellt
 - lokaler Datenschutzfilter vor jeder Formulierung
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-### Entscheidung nach iPhone-Gerätetest
+### Ergebnis des ersten iPhone-Gerätetests
 
-Der erste WebGPU-Versuch mit `onnx-community/Qwen2.5-0.5B-Instruct` war auf dem getesteten iPhone nicht praxistauglich: Der mehrere hundert MB große Modelldownload dauerte mehrere Minuten und der Start brach anschließend ab. Deshalb ist ein großes lokales Sprachmodell **nicht mehr Voraussetzung für die normale Nutzung**.
+Der erste manuelle Start des WebGPU-Modells war auf dem getesteten iPhone nicht praxistauglich: Der mehrere hundert MB große Modelldownload dauerte mehrere Minuten und der Start brach anschließend ab. Deshalb darf das große lokale Sprachmodell die Bedienung nicht blockieren.
 
-Der aktuelle Schnellmodus erzeugt den vollständigen, zum gewählten HEB-Bogen passenden Entwurf sofort lokal. Ein stärkeres lokales Sprachmodell bleibt ein separates Forschungs-/Qualitätsthema und darf die mobile Grundfunktion nicht blockieren.
+Die aktuelle Architektur kombiniert deshalb beides: HEB-Assist ist sofort nutzbar, während das stärkere Modell automatisch im Hintergrund lädt. Wenn es erfolgreich bereitsteht, übernimmt es neue Formulierungen. Wenn nicht, bleibt der Schnellmodus aktiv.
 
 ## Aktuell implementiert
 
@@ -51,6 +55,9 @@ Der aktuelle Schnellmodus erzeugt den vollständigen, zum gewählten HEB-Bogen p
 - ein einziges Eingabefeld in Alltagssprache
 - ein einziger Button für den vollständigen HEB-Entwurf
 - automatische Struktur passend zu A, B oder C
+- sichtbarer Status des lokalen Sprachmodells
+- automatisches Hintergrundladen des Sprachmodells
+- sofortiger lokaler Fallback ohne Wartezeit
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
 - PWA-Manifest und Offline-App-Shell
 - Kopierfunktion
