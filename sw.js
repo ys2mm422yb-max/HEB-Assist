@@ -1,4 +1,4 @@
-const CACHE_NAME = 'heb-assist-shell-v12';
+const CACHE_NAME = 'heb-assist-shell-v13';
 const APP_SHELL = [
   './',
   './index.html',
