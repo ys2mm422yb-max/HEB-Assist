@@ -5,18 +5,13 @@ const STOP_WORDS = new Set([
   'aber','alle','allem','allen','aller','alles','als','also','am','an','auch','auf','aus','bei','beim','bis','da','das','dass','dem','den','der','des','die','dies','diese','diesem','diesen','dieser','dieses','durch','ein','eine','einem','einen','einer','eines','er','es','für','hat','haben','im','in','ist','ja','mit','nach','nicht','noch','nur','oder','ohne','sie','sich','so','um','und','vom','von','vor','was','wenn','werden','wird','zu','zum','zur','ihre','ihr','ihren','ihrem','ihres','ihnen','ihm','kann','können','soll','sollen','muss','müssen','wurde','wurden','dabei','dann','derzeit','aktuell'
 ]);
 
-// Fachlich neutrale Wörter, die bei einer Verdichtung neu hinzukommen dürfen,
-// ohne eine neue Tatsache zu erzeugen. Inhaltstragende neue Wörter bleiben
-// weiterhin durch den Quellenanker blockiert.
+// Nur wirklich neutrale Fachwörter dürfen ohne wörtliches Pendant in der Quelle
+// hinzukommen. Konkrete Unterstützungsformen, Fähigkeiten, Tätigkeiten und Ziele
+// stehen absichtlich NICHT hier: sie müssen aus dem Originalbeleg stammen.
 const GENERIC_HEB_ROOTS = new Set([
   'person','leistungsberechtigt','unterstütz','unterstützungsbedarf','hilfebedarf','bedarf',
-  'ressourc','selbstständig','eigenständig','überwiegend','erforderlich','benötig','geling',
-  'erfolg','erfolgt','erfolgen','aufnahm','beginn','durchführ','plan','planung','struktur',
-  'strukturier','begleit','impuls','erinner','angebot','gemeinsam','rahmenziel','ziel',
-  'maßnahm','maßnahme','aktuell','weiterhin','bedarfsorientiert','konkret','alltag',
-  'alltags','organisation','organisier','unterstützungsform','erhalt','stabilisier','entwickl',
-  'fortschreib','reflexion','verlauf','förderzeitraum','planungszeitraum','besteh','besteht',
-  'noch','weiter','erneut','später','häufig','einzeln','weitgehend','weitere','vorgesehen'
+  'ressourc','erforderlich','konkret','aktuell','bereich','angab','beleg','besteh','besteht',
+  'hinsichtlich','bezüglich','insbesondere','weiterhin'
 ]);
 
 const EVALUATIVE_PATTERNS = [
@@ -56,8 +51,6 @@ export function splitEvidenceUnits(notes) {
       continue;
     }
 
-    // Sehr lange Stichpunkte werden nur an Kommas geteilt, wenn dadurch
-    // ausreichend verständliche Teilstücke entstehen. Es wird nichts ergänzt.
     const parts = item.split(/,\s+/).map(cleanUnit).filter((part) => part.length >= 18);
     if (parts.length >= 2) {
       for (const part of parts) {
@@ -177,7 +170,7 @@ export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } =
   }
 
   const wordCount = (cleaned.match(/\S+/g) || []).length;
-  if (wordCount > maxWords + 8) reasons.push('zu lang');
+  if (wordCount > maxWords + 6) reasons.push('zu lang');
   if (cleaned && !/[.!?…][”"']?$/.test(cleaned)) reasons.push('unvollständiger Satz');
 
   const evidenceRoots = new Set(contentRoots(evidence));
@@ -186,7 +179,10 @@ export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } =
   const uniqueOutput = new Set(outputRoots);
   const unsupportedRatio = uniqueOutput.size ? unsupported.length / uniqueOutput.size : 0;
 
-  if (unsupported.length >= 3 || (unsupported.length >= 2 && unsupportedRatio > 0.28)) {
+  // Da jeder Mikrotext nur EINEN Originalbeleg erhält, darf die Formulierung
+  // kaum neue Inhaltswörter einführen. Genau dadurch können Inhalte verschiedener
+  // Aussagen nicht unbemerkt miteinander vermischt werden.
+  if (unsupported.length >= 2 || (unsupported.length === 1 && unsupportedRatio > 0.22)) {
     reasons.push(`nicht belegte Inhaltswörter: ${unsupported.slice(0, 4).join(', ')}`);
   }
 
