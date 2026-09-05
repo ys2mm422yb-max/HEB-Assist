@@ -37,9 +37,10 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - automatisch aktualisierende App-Shell: Update-Prüfung beim Öffnen, beim Zurückkehren in die App und regelmäßig während längerer Nutzung
 - online werden HTML/JavaScript/CSS bevorzugt frisch geladen; vorhandener Cache dient als Offline-Fallback
 - ein Update wird automatisch aktiviert, aber bei aktiver HEB-Eingabe nicht durch einen erzwungenen Neustart mit Datenverlust übernommen
-- lokales Sprachmodell `onnx-community/Qwen2.5-0.5B-Instruct`
-- Transformers.js 4.2.0 mit WebGPU
-- auf Safari 26+ wird die von Hugging Face später upstream eingebaute Asyncify-WebGPU-Konfiguration explizit gesetzt, weil Transformers.js 4.2.0 diese Safari-26-Korrektur noch nicht enthält
+- lokales Sprachmodell: Gemma 3 270M Instruct, Q8_0
+- lokale Laufzeit: `gemma-webgpu` 0.1.0 über reines WebGPU
+- das Modell wird speicherschonend per HTTP-Range-Requests in Abschnitten geladen und direkt in GPU-Speicher übertragen; dadurch muss nicht die komplette Modelldatei gleichzeitig als JavaScript-/WASM-Speicher gehalten werden
+- Kontextlänge im aktuellen mobilen Testprofil: 1024 Tokens
 - das Eingabefeld bleibt bis zum vollständigen Modellstart gesperrt
 - klare Zustände: Laden → `KI ist bereit ✓` oder `KI nicht verfügbar`
 - bei einem Startfehler wird eine technische Fehlermeldung lokal angezeigt; sie enthält keine HEB-Eingabe
@@ -48,11 +49,21 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-### Ergebnis der bisherigen iPhone-Gerätetests
+### Externe Netzwerkzugriffe
 
-Der Modelldownload konnte auf dem getesteten iPhone vollständig bis 100 % laufen, anschließend schlug der eigentliche Start des WebGPU-Modells fehl. Das bedeutet: 100 % Download ist nicht gleichbedeutend mit einer einsatzbereiten KI.
+Beim Laden der App bzw. des lokalen Modells werden ausschließlich statische Ressourcen abgerufen:
 
-Als konkrete technische Ursache wurde identifiziert, dass die App Transformers.js 4.2.0 verwendet. Diese Version erschien am 23. April 2026. Die spezielle Safari-26-WebGPU-Korrektur wurde im Transformers.js-Projekt erst am 8. Juni 2026 gemergt und ist deshalb nicht Bestandteil von 4.2.0. HEB-Assist setzt die entsprechende Asyncify-Konfiguration für Safari 26+ nun selbst. Ob zusätzlich eine iOS-Speichergrenze oder ein weiterer WebGPU-Fehler auftritt, muss auf dem echten Gerät erneut geprüft werden.
+- GitHub Pages: App-Dateien
+- jsDelivr: `gemma-webgpu`-Laufzeitbibliothek
+- Hugging Face: Gemma-Modellgewichte über HTTP-Range-Requests
+
+Die HEB-Eingabe wird nicht an diese Dienste zur Inferenz gesendet. Die eigentliche Textgenerierung läuft im Browser auf dem Endgerät. Normale Verbindungsmetadaten eines Downloads, z. B. IP-Adresse und Browserinformationen, können bei den jeweiligen Infrastrukturbetreibern technisch anfallen.
+
+## Ergebnis der bisherigen iPhone-Gerätetests
+
+Die bisherigen Transformers.js-/ONNX-Runtime-Varianten konnten das Modell zwar laden, Safari wurde jedoch bei der eigentlichen autoregressiven Textgenerierung wiederholt vom Betriebssystem beendet. Das trat sowohl mit WebGPU als auch mit einem WASM-Versuch auf.
+
+Deshalb wird dieser ONNX-Pfad für iPhone/iPad nicht weiterverfolgt. Der aktuelle Testpfad verwendet stattdessen `gemma-webgpu`, dessen Gewichte schichtweise geladen werden und dessen Entwickler einen realen iPhone-17-Pro-Max-Test unter Safari/iOS 26 dokumentiert haben. Dieser neue Pfad muss auf dem realen Zielgerät noch mit HEB-Generierung verifiziert werden.
 
 ## Aktuell implementiert
 
@@ -63,7 +74,7 @@ Als konkrete technische Ursache wurde identifiziert, dass die App Transformers.j
 - ein einziger Button für den vollständigen HEB-Entwurf
 - automatische Struktur passend zu A, B oder C
 - sichtbarer Status des lokalen Sprachmodells
-- automatisches Laden und Starten des Sprachmodells
+- vollständiger Ladebildschirm bis zur einsatzbereiten KI
 - HEB-Eingabe erst nach erfolgreichem KI-Start
 - technische Fehleranzeige und manueller Neustart der KI
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
