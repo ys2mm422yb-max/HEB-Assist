@@ -174,9 +174,10 @@ function introducesForeignConcept(output, evidence) {
 }
 
 function hasScopeMismatch(output, evidence) {
+  const activityVerb = '(?:durchführ\\w*|durchzuführ\\w*|erledig\\w*|bewältig\\w*)';
   const sourceInitiationOnly = /\b(impuls\w*|erinner\w*|aufforder\w*|angebot\w*)\b.{0,90}\b(beginnen|beginn\w*|starten|aufnahme)\b/i.test(evidence);
-  const sourceSelfExecution = /\b(selbstständig|eigenständig|überwiegend\s+selbstständig)\b.{0,80}\b(durchführ\w*|erledig\w*|bewältig\w*)\b|\b(durchführ\w*|erledig\w*|bewältig\w*)\b.{0,80}\b(selbstständig|eigenständig)\b/i.test(evidence);
-  const outputNeedsExecutionHelp = /\b(unterstütz\w*|hilfe\w*|hilfebedarf|bedarf)\b.{0,90}\b(durchführ\w*|erledig\w*|bewältig\w*)\b/i.test(output);
+  const sourceSelfExecution = new RegExp(`\\b(selbstständig|eigenständig|überwiegend\\s+selbstständig)\\b.{0,80}\\b${activityVerb}\\b|\\b${activityVerb}\\b.{0,80}\\b(selbstständig|eigenständig)\\b`, 'i').test(evidence);
+  const outputNeedsExecutionHelp = new RegExp(`\\b(unterstütz\\w*|hilfe\\w*|hilfebedarf|bedarf)\\b.{0,90}\\b${activityVerb}\\b`, 'i').test(output);
   return outputNeedsExecutionHelp && (sourceInitiationOnly || sourceSelfExecution);
 }
 
