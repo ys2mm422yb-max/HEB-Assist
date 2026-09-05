@@ -15,19 +15,32 @@ Stand: 2026-09-05
   - Postleitzahl: erkannt
   - Personenname nach Anrede: erkannt
   - typische Versicherungsnummer: erkannt
-- Transformers.js 4.2.0 unterstützt die verwendete CDN-ES-Module-Einbindung.
-- Qwen2.5-0.5B-Instruct ist als Transformers.js-kompatibles ONNX-Modell verfügbar und unterstützt Deutsch.
+- Öffentliche Netlify-Testseite ist erreichbar.
+- Reale Darstellung auf einem iPhone wurde geprüft.
+- HEB A / B / C und die fünf offiziellen HEB-Bereiche wurden anhand der bereitgestellten bayerischen HEB-Bögen abgeglichen.
+
+## Ergebnis des ersten lokalen KI-Tests auf iPhone
+
+- WebGPU wurde vom Browser grundsätzlich erkannt.
+- Der Download des Qwen2.5-0.5B-Instruct-Modells startete.
+- Der Modelldownload / Modellstart dauerte mehrere Minuten.
+- Der Start brach auf dem getesteten iPhone anschließend ab.
+- Ergebnis: Dieser große lokale Modellpfad ist für die mobile Grundfunktion derzeit **nicht praxistauglich** und darf die normale Nutzung nicht blockieren.
+
+## Aktuelle Gegenmaßnahme
+
+- Die verwirrende Auswahl einzelner HEB-Unterpunkte wurde entfernt.
+- Normaler Workflow: HEB-Bogen wählen → HEB-Bereich wählen → Situation frei beschreiben → ein Button → vollständiger Entwurf.
+- Der Standardpfad verwendet einen sofortigen lokalen Schnellmodus ohne großen Modelldownload.
+- Das große lokale Sprachmodell bleibt nur ein separates Experiment und ist nicht Voraussetzung für die Nutzung.
+- PWA-Cache wurde auf `heb-assist-shell-v3` erhöht, damit Zielgeräte die neue Oberfläche laden.
 
 ## Noch nicht geprüft / keine Freigabe
 
-- kein realer iPhone-Test
+- neuer Schnellmodus noch nicht auf dem realen iPhone gegengeprüft
 - kein realer Android-Test
-- kein vollständiger WebGPU-Modell-Download auf einem Zielgerät
-- keine belastbare Messung von Ladezeit, RAM, Akkuverbrauch oder Generierungsgeschwindigkeit
-- noch keine fachliche Qualitätsbewertung der generierten HEB-Texte
-- noch keine Prüfung mit dem tatsächlich verwendeten HEB-Bogen / den Trägervorgaben
-- noch keine produktive Hosting-URL
-- keine Freigabe für echte Falldaten
+- noch keine systematische fachliche Qualitätsbewertung mit mehreren fiktiven HEB-Fällen
+- noch keine produktive Freigabe für echte Falldaten
 
 ## Freigaberegel
 
