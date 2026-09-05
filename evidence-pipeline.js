@@ -5,13 +5,14 @@ const STOP_WORDS = new Set([
   'aber','alle','allem','allen','aller','alles','als','also','am','an','auch','auf','aus','bei','beim','bis','da','das','dass','dem','den','der','des','die','dies','diese','diesem','diesen','dieser','dieses','durch','ein','eine','einem','einen','einer','eines','er','es','für','hat','haben','im','in','ist','ja','mit','nach','nicht','noch','nur','oder','ohne','sie','sich','so','um','und','vom','von','vor','was','wenn','werden','wird','zu','zum','zur','ihre','ihr','ihren','ihrem','ihres','ihnen','ihm','kann','können','soll','sollen','muss','müssen','wurde','wurden','dabei','dann','derzeit','aktuell'
 ]);
 
-// Nur wirklich neutrale Fachwörter dürfen ohne wörtliches Pendant in der Quelle
-// hinzukommen. Konkrete Unterstützungsformen, Fähigkeiten, Tätigkeiten und Ziele
-// stehen absichtlich NICHT hier: sie müssen aus dem Originalbeleg stammen.
+// Nur neutrale HEB-Wörter, die keine neue Tatsache erzeugen. Die Liste dient
+// nicht als Wahrheitsprüfung; die semantische Quellenprüfung erfolgt zusätzlich
+// mit dem lokalen Sprachmodell.
 const GENERIC_HEB_ROOTS = new Set([
   'person','leistungsberechtigt','unterstütz','unterstützungsbedarf','hilfebedarf','bedarf',
   'ressourc','erforderlich','konkret','aktuell','bereich','angab','beleg','besteh','besteht',
-  'hinsichtlich','bezüglich','insbesondere','weiterhin'
+  'hinsichtlich','bezüglich','insbesondere','weiterhin','initiier','initiation','aufnahm',
+  'beginn','organisation','organisier','durchführ','planung','plan','überblick','übersicht'
 ]);
 
 const EVALUATIVE_PATTERNS = [
@@ -23,6 +24,16 @@ const EVALUATIVE_PATTERNS = [
   /\bunangemessen(?:e|er|es|en)?\b/i,
   /\bproblematisch(?:e|er|es|en)?\b/i,
 ];
+
+const CONCEPT_PATTERNS = {
+  bodyCare: /\b(körperpflege|körperhygiene|pflegeprodukt\w*|hygiene)\b/i,
+  shopping: /\b(einkauf\w*|einkäufe|geschäft|einkaufsplanung)\b/i,
+  finances: /\b(geld|finanz\w*|budget|geldmittel|finanzielle[nrsm]*\s+mittel)\b/i,
+  housing: /\b(wohnung|wohnen|wohnraum|haushalt)\b/i,
+  work: /\b(arbeit|arbeitsplatz|ausbildung|beschäftigung)\b/i,
+  leisure: /\b(freizeit|tagesgestaltung|gesellschaftlichen\s+leben|teilnahme)\b/i,
+  relationships: /\b(beziehung\w*|kontakt\w*|soziale[nrsm]*\s+kontakt)\b/i,
+};
 
 function cleanUnit(text) {
   return String(text || '')
@@ -144,6 +155,31 @@ function numbersIn(text) {
   return new Set((String(text || '').match(/\b\d+(?:[.,]\d+)?\b/g) || []));
 }
 
+function conceptSet(text) {
+  const found = new Set();
+  for (const [key, pattern] of Object.entries(CONCEPT_PATTERNS)) {
+    if (pattern.test(String(text || ''))) found.add(key);
+  }
+  return found;
+}
+
+function introducesForeignConcept(output, evidence) {
+  const sourceConcepts = conceptSet(evidence);
+  const outputConcepts = conceptSet(output);
+  if (!sourceConcepts.size || !outputConcepts.size) return false;
+  for (const concept of outputConcepts) {
+    if (!sourceConcepts.has(concept)) return true;
+  }
+  return false;
+}
+
+function hasScopeMismatch(output, evidence) {
+  const sourceInitiationOnly = /\b(impuls\w*|erinner\w*|aufforder\w*|angebot\w*)\b.{0,90}\b(beginnen|beginn\w*|starten|aufnahme)\b/i.test(evidence);
+  const sourceSelfExecution = /\b(selbstständig|eigenständig|überwiegend\s+selbstständig)\b.{0,80}\b(durchführ\w*|erledig\w*|bewältig\w*)\b|\b(durchführ\w*|erledig\w*|bewältig\w*)\b.{0,80}\b(selbstständig|eigenständig)\b/i.test(evidence);
+  const outputNeedsExecutionHelp = /\b(unterstütz\w*|hilfe\w*|hilfebedarf|bedarf)\b.{0,90}\b(durchführ\w*|erledig\w*|bewältig\w*)\b/i.test(output);
+  return outputNeedsExecutionHelp && (sourceInitiationOnly || sourceSelfExecution);
+}
+
 export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } = {}) {
   const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
   const evidence = (evidenceTexts || []).join(' ').trim();
@@ -162,6 +198,9 @@ export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } =
     reasons.push('nicht belegte Ursache');
   }
 
+  if (introducesForeignConcept(cleaned, evidence)) reasons.push('fremder Themeninhalt');
+  if (hasScopeMismatch(cleaned, evidence)) reasons.push('Unterstützungsumfang verändert');
+
   const outputNumbers = numbersIn(cleaned);
   const evidenceNumbers = numbersIn(evidence);
   for (const number of outputNumbers) {
@@ -175,15 +214,13 @@ export function validateAnchoredHebText(text, evidenceTexts, { maxWords = 50 } =
   if (wordCount > maxWords + 6) reasons.push('zu lang');
   if (cleaned && !/[.!?…][”"']?$/.test(cleaned)) reasons.push('unvollständiger Satz');
 
+  // Lexikalische Abweichungen sind nur noch Diagnosehinweise. Eine rein
+  // wortbasierte Sperre hat fachlich korrekte Paraphrasen wie „Initiierung“
+  // oder „Überblick“ zu oft verworfen. Die semantische Faktentreue wird im
+  // nächsten Schritt zusätzlich vom lokalen Modell gegen genau einen Beleg geprüft.
   const evidenceRoots = new Set(contentRoots(evidence));
   const outputRoots = contentRoots(cleaned, { includeGeneric: false });
   const unsupported = [...new Set(outputRoots.filter((root) => !evidenceRoots.has(root)))];
-  const uniqueOutput = new Set(outputRoots);
-  const unsupportedRatio = uniqueOutput.size ? unsupported.length / uniqueOutput.size : 0;
-
-  if (unsupported.length >= 2 || (unsupported.length === 1 && unsupportedRatio > 0.22)) {
-    reasons.push(`nicht belegte Inhaltswörter: ${unsupported.slice(0, 4).join(', ')}`);
-  }
 
   return {
     ok: reasons.length === 0,
