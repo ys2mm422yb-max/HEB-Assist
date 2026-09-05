@@ -1,9 +1,11 @@
 import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
 
-const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm';
-const MODEL_KEY = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
-const MODEL_LABEL = 'Qwen 2.5 0.5B Instruct';
-const MODEL_PROFILE = 'webllm-qwen25-05b-cached';
+// Pin to the last WebLLM release before the 0.2.83 shape-cache regression.
+const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.82';
+const MODEL_KEY = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const MODEL_LABEL = 'Qwen 2.5 1.5B Instruct';
+const MODEL_PROFILE = 'webllm-qwen25-15b-cached-ctx1024';
+const CONTEXT_WINDOW_SIZE = 1024;
 
 const CORE_RULES = `Du bist HEB Assist. Du formulierst ausschließlich professionelle HEB-Texte für die sozialpsychiatrische Eingliederungshilfe.
 
@@ -16,7 +18,7 @@ Verbindliche Regeln:
 - Verwende „die Person“ oder „die leistungsberechtigte Person“, keine Namen.
 - Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
 - Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
-- Keine Überschriften, Listen, HEB-Kürzel oder Meta-Kommentare in der eigentlichen Antwort.
+- Keine Überschriften, Listen, Nummerierungen, Markdown, HEB-Kürzel oder Meta-Kommentare in der eigentlichen Antwort.
 - Antworte nur mit dem fertigen Fließtext für genau den angeforderten Unterpunkt.
 - „Hierzu liegen keine ausreichenden Angaben vor.“ darf nur verwendet werden, wenn die Fallbeschreibung tatsächlich keinerlei verwertbare Information für diesen Unterpunkt enthält.`;
 
@@ -125,10 +127,21 @@ async function prepareRuntime(onProgress) {
   }, onProgress);
 
   const webllm = await import(WEBLLM_URL);
+  const modelList = webllm.prebuiltAppConfig.model_list.map((entry) => {
+    if (entry.model_id !== MODEL_KEY) return entry;
+    return {
+      ...entry,
+      overrides: {
+        ...(entry.overrides || {}),
+        context_window_size: CONTEXT_WINDOW_SIZE,
+      },
+    };
+  });
+
   const config = {
     ...webllm.prebuiltAppConfig,
     cacheBackend: 'cache',
-    model_list: [...webllm.prebuiltAppConfig.model_list],
+    model_list: modelList,
   };
 
   const supportedModel = config.model_list.some((entry) => entry.model_id === MODEL_KEY);
@@ -191,8 +204,9 @@ async function loadEngine(onProgress) {
         label: MODEL_LABEL,
         profile: MODEL_PROFILE,
         device: 'webgpu',
-        runtimeLabel: 'WebLLM',
+        runtimeLabel: 'WebLLM 0.2.82',
         persistentCache: 'Cache API',
+        contextLength: CONTEXT_WINDOW_SIZE,
       };
 
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
@@ -226,7 +240,7 @@ function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel }
   const guidance = SECTION_GUIDANCE[sectionMode] || '';
   const example = SECTION_EXAMPLES[sectionMode] || '';
 
-  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nFachliche Aufgabe:\n${instruction}\n\nWichtige Auslegung für diesen Unterpunkt:\n${guidance}\n${example ? `\n${example}\n` : ''}\nFallbeschreibung:\n${notes}\n\nFormuliere jetzt ausschließlich den Inhalt dieses Unterpunkts. Nutze die tatsächlich vorhandenen Angaben. Schreibe 1 bis 3 vollständige Sätze mit höchstens 90 Wörtern. Keine Vorbemerkung, keine Überschrift und keine Liste.`;
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nFachliche Aufgabe:\n${instruction}\n\nWichtige Auslegung für diesen Unterpunkt:\n${guidance}\n${example ? `\n${example}\n` : ''}\nFallbeschreibung:\n${notes}\n\nFormuliere jetzt ausschließlich den Inhalt dieses Unterpunkts. Nutze die tatsächlich vorhandenen Angaben. Schreibe 1 bis 3 vollständige Sätze mit höchstens 90 Wörtern. Keine Vorbemerkung, keine Überschrift, keine Nummerierung, kein Markdown und keine Liste.`;
 }
 
 function normalizeOutput(text) {
@@ -269,6 +283,7 @@ function isDegenerateOutput(text) {
 
   if (/\bHEBI?[-:]|HEB-(?:Bereich|Reise|Bereit|Beispiel)|Abstand\s*100\s*%/i.test(cleaned)) return true;
   if (/\b(?:[A-Za-zÄÖÜäöüß]+-){3,}[A-Za-zÄÖÜäöüß]+\b/.test(cleaned)) return true;
+  if (/\*\*|^\s*(?:\d+[.)]|[-*•])\s+/m.test(cleaned)) return true;
 
   const lines = cleaned
     .split(/\n+/)
@@ -298,14 +313,14 @@ async function runSection(engine, prompt, strictRetry = false) {
       {
         role: 'user',
         content: strictRetry
-          ? `${prompt}\n\nDie erste Antwort war unbrauchbar. Lies die Fallbeschreibung noch einmal genau. Verwende vorhandene Alltagsschilderungen als fachlich verwertbare Angaben. Antworte nicht mit „keine ausreichenden Angaben“, wenn im Text konkrete Selbstständigkeit, Schwierigkeiten oder Unterstützung beschrieben sind. Prüfe außerdem korrektes Deutsch und erfinde nichts.`
+          ? `${prompt}\n\nDie erste Antwort war unbrauchbar. Lies die Fallbeschreibung noch einmal genau. Verwende vorhandene Alltagsschilderungen als fachlich verwertbare Angaben. Antworte nicht mit „keine ausreichenden Angaben“, wenn im Text konkrete Selbstständigkeit, Schwierigkeiten oder Unterstützung beschrieben sind. Prüfe außerdem korrektes Deutsch. Gib ausschließlich natürlichen deutschen Fließtext ohne Nummerierung, Markdown, Fantasiewörter oder erfundene Fachbegriffe aus.`
           : prompt,
       },
     ],
     temperature: strictRetry ? 0.05 : 0.08,
     top_p: 0.9,
     repetition_penalty: strictRetry ? 1.18 : 1.1,
-    max_tokens: strictRetry ? 120 : 120,
+    max_tokens: 120,
   });
 
   return normalizeOutput(response?.choices?.[0]?.message?.content || '');
@@ -319,7 +334,7 @@ async function generateSection(engine, prompt, context) {
   text = await runSection(engine, prompt, true);
   invalid = isDegenerateOutput(text) || (shouldContainContent(context) && isMissingOutput(text));
   if (invalid) {
-    throw new Error('Die lokale KI hat für mindestens einen HEB-Unterpunkt keinen fachlich verwertbaren Text erzeugt. Der Entwurf wurde verworfen, statt eine offensichtlich falsche Leer-Antwort anzuzeigen.');
+    throw new Error('Die lokale KI hat für mindestens einen HEB-Unterpunkt keinen fachlich verwertbaren Text erzeugt. Der Entwurf wurde verworfen, statt eine offensichtlich falsche oder sprachlich degenerierte Ausgabe anzuzeigen.');
   }
 
   return text;
