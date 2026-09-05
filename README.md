@@ -17,6 +17,7 @@ Mitarbeitende beschreiben eine Situation in normaler Alltagssprache. HEB-Assist 
 - **Keine erfundenen Tatsachen:** Diagnosen, Fähigkeiten, Einschränkungen, Ereignisse, Entwicklungen, Ziele oder Unterstützungsbedarfe dürfen nicht frei ergänzt werden.
 - **Fachliche Trennung:** Beobachtung, Selbstaussage und fachliche Einschätzung werden nicht vermischt.
 - **Menschliche Verantwortung:** Ausgaben sind Formulierungsvorschläge und müssen vor Übernahme fachlich geprüft werden.
+- **Automatische Updates:** veröffentlichte App-Versionen werden automatisch erkannt und übernommen; Kolleginnen und Kollegen sollen weder Cache leeren noch die PWA neu installieren müssen.
 
 ## Fachliche Grundlage
 
@@ -32,6 +33,9 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 
 - statische HTML/CSS/JavaScript-Web-App ohne Backend
 - Progressive Web App mit Service Worker und App-Shell-Cache
+- automatisch aktualisierende App-Shell: Update-Prüfung beim Öffnen, beim Zurückkehren in die App und regelmäßig während längerer Nutzung
+- online werden HTML/JavaScript/CSS bevorzugt frisch geladen; vorhandener Cache dient als Offline-Fallback
+- ein Update wird automatisch aktiviert, aber bei aktiver HEB-Eingabe nicht durch einen erzwungenen Neustart mit Datenverlust übernommen
 - sofort nutzbarer lokaler Schnellmodus
 - stärkeres lokales Sprachmodell (`onnx-community/Qwen2.5-0.5B-Instruct`) wird nach dem Öffnen automatisch im Hintergrund vorbereitet
 - klar sichtbarer KI-Status mit Ladefortschritt, Bereitschaft oder Fallback-Zustand
@@ -59,6 +63,7 @@ Die aktuelle Architektur kombiniert deshalb beides: HEB-Assist ist sofort nutzba
 - automatisches Hintergrundladen des Sprachmodells
 - sofortiger lokaler Fallback ohne Wartezeit
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
+- automatische PWA-Update-Erkennung und sichere Übernahme neuer Versionen
 - PWA-Manifest und Offline-App-Shell
 - Kopierfunktion
 
