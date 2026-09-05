@@ -39,6 +39,9 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - Keine automatische medizinische oder rechtliche Entscheidung.
 - Keine endgültige fachliche Bewertung ohne Hinweis auf menschliche Prüfung.
 - Aussagen des Nutzers dürfen sprachlich verbessert, aber inhaltlich nicht erweitert werden.
+- HEB-Eingaben dürfen erst verarbeitet werden, wenn das tatsächliche lokale Sprachmodell vollständig gestartet und einsatzbereit ist.
+- Kein versteckter regel-/regexbasierter Ersatzmodus darf als KI-Ausgabe erscheinen oder bei ausgefallenem Sprachmodell automatisch HEB-Texte erzeugen.
+- Der Status muss eindeutig zwischen Laden, einsatzbereiter KI und Startfehler unterscheiden.
 
 ## 6. Qualität
 
