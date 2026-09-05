@@ -1,26 +1,41 @@
 import { HEB_FORM_CONFIG, getOutputInstruction } from './heb-knowledge.js';
 
 const GEMMA_WEBGPU_URL = 'https://cdn.jsdelivr.net/npm/gemma-webgpu@0.1.0/dist/index.js';
-const MODEL_KEY = '270m';
-const MODEL_LABEL = 'Gemma 3 270M Q8_0';
+const MODEL_KEY = '1b';
+const MODEL_LABEL = 'Gemma 3 1B Q8_0';
 const CONTEXT_LENGTH = 1024;
 
 const CORE_RULES = `Du bist HEB Assist, ein fachlicher Formulierungsassistent für die sozialpsychiatrische Eingliederungshilfe.
-Verbindlich:
+Regeln:
 - Nutze ausschließlich Angaben aus der Fallbeschreibung. Nichts erfinden oder ergänzen.
 - Keine Diagnose, Symptome, Risiken, Fähigkeiten, Ressourcen, Entwicklung, Ziele, Maßnahmen oder Hilfebedarfe behaupten, die nicht aus der Eingabe hervorgehen.
-- Schreibe wertschätzend, sachlich, ressourcenorientiert und in gut verständlichem Deutsch.
+- Schreibe sachlich, wertschätzend, ressourcenorientiert und in professionellem, gut verständlichem Deutsch.
 - Verwende keine Namen; schreibe „die leistungsberechtigte Person“ oder „die Person“.
 - Selbstaussage, Beobachtung und fachliche Einschätzung nicht vermischen.
-- Unterstützungsbedarf konkret und wertfrei beschreiben.
 - Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
-- HEB-Bogentyp, Bereich und Unterpunkte exakt beachten.
-- Wenn eine nötige Angabe fehlt, sage knapp, dass hierzu keine ausreichende Angabe vorliegt, statt etwas zu erfinden.`;
+- Wenn für den verlangten Unterpunkt Angaben fehlen, schreibe knapp: „Hierzu liegen keine ausreichenden Angaben vor.“`;
 
-const OUTPUT_STRUCTURES = {
-  A: `a) Aktuelle Situation bzw. Problemlage unter Berücksichtigung der Ressourcen\nb) Einschätzung des Hilfebedarfs\nc) Rahmenziele\nd) Geplante Maßnahmen`,
-  B: `a) Reflexion der durchgeführten Maßnahmen\nb) Entwicklung im Planungszeitraum unter Berücksichtigung der Ressourcen\nc) Einschätzung des Hilfebedarfs\nd) Fortschreibung der Rahmenziele\ne) Geplante Maßnahmen`,
-  C: `a) Reflexion der durchgeführten Maßnahmen\nb) Entwicklung unter Berücksichtigung der Ressourcen\nc) Noch bestehender Hilfebedarf\nd) Weitere Maßnahmen\ne) Durch wen werden Maßnahmen erbracht`,
+const SECTION_MODES = {
+  A: [
+    ['current', 'a) Aktuelle Situation bzw. Problemlage unter Berücksichtigung der Ressourcen'],
+    ['support', 'b) Einschätzung des Hilfebedarfs'],
+    ['goals', 'c) Rahmenziele'],
+    ['measures', 'd) Geplante Maßnahmen'],
+  ],
+  B: [
+    ['reflection', 'a) Reflexion der durchgeführten Maßnahmen'],
+    ['development', 'b) Entwicklung im Planungszeitraum unter Berücksichtigung der Ressourcen'],
+    ['support', 'c) Einschätzung des Hilfebedarfs'],
+    ['goals', 'd) Fortschreibung der Rahmenziele'],
+    ['measures', 'e) Geplante Maßnahmen'],
+  ],
+  C: [
+    ['reflection', 'a) Reflexion der durchgeführten Maßnahmen'],
+    ['development', 'b) Entwicklung unter Berücksichtigung der Ressourcen'],
+    ['remainingSupport', 'c) Noch bestehender Hilfebedarf'],
+    ['furtherMeasures', 'd) Weitere Maßnahmen'],
+    ['provider', 'e) Durch wen werden Maßnahmen erbracht'],
+  ],
 };
 
 let enginePromise = null;
@@ -43,7 +58,7 @@ export function getLocalAiCapability() {
   return {
     hasWebGPU,
     supported: hasWebGPU,
-    modelProfile: 'streaming-webgpu',
+    modelProfile: 'streaming-webgpu-1b',
     modelLabel: MODEL_LABEL,
     runtime: 'gemma-webgpu',
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
@@ -90,7 +105,7 @@ async function loadEngine(onProgress) {
       setModelState({
         status: 'loading',
         percent: 3,
-        text: 'Speicherschonende KI-Laufzeit wird geladen …',
+        text: 'Stärkeres lokales Sprachmodell wird vorbereitet …',
         error: null,
       }, onProgress);
 
@@ -99,7 +114,7 @@ async function loadEngine(onProgress) {
       setModelState({
         status: 'loading',
         percent: 4,
-        text: 'Sprachmodell wird in kleinen Abschnitten geladen …',
+        text: 'Gemma 3 1B wird speicherschonend in Abschnitten geladen …',
         error: null,
       }, onProgress);
 
@@ -113,7 +128,7 @@ async function loadEngine(onProgress) {
       modelInfo = {
         id: MODEL_KEY,
         label: MODEL_LABEL,
-        profile: 'streaming-webgpu',
+        profile: 'streaming-webgpu-1b',
         device: 'webgpu',
         runtimeLabel: 'gemma-webgpu 0.1.0',
         contextLength: CONTEXT_LENGTH,
@@ -144,44 +159,106 @@ export function preloadLocalAi(onProgress) {
   return loadEngine(onProgress);
 }
 
-function buildPrompt({ notes, area, formType, mode }) {
+function buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
-  const instruction = getOutputInstruction(formType, mode);
-  const structure = OUTPUT_STRUCTURES[formType] || OUTPUT_STRUCTURES.A;
+  const instruction = getOutputInstruction(formType, sectionMode);
 
-  return `${CORE_RULES}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\n\nAufgabe:\n${instruction}\n\nVerwende genau diese Gliederung:\n${structure}\n\nFallbeschreibung:\n${notes}\n\nGib ausschließlich den fertigen HEB-Entwurf aus. Keine Vorbemerkung, keine Diagnose und keine zusätzlichen Tatsachen.`;
+  return `${CORE_RULES}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nAufgabe:\n${instruction}\n\nFallbeschreibung:\n${notes}\n\nSchreibe nur den Inhalt dieses einen Unterpunkts, ohne Überschrift. Maximal 3 Sätze und höchstens 70 Wörter. Keine Vorbemerkung.`;
 }
 
-export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
-  const engine = await loadEngine(onProgress);
-  const prompt = buildPrompt({ notes, area, formType, mode });
+function normalizeOutput(text) {
+  return text
+    .replace(/<start_of_turn>|<end_of_turn>|<bos>|<eos>/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
-  setModelState({ status: 'generating', percent: 100, text: 'KI formuliert …', error: null }, onProgress);
+function isDegenerateOutput(text) {
+  const cleaned = normalizeOutput(text);
+  if (!cleaned) return true;
 
+  const lines = cleaned
+    .split(/\n+/)
+    .map((line) => line.trim().toLowerCase())
+    .filter(Boolean);
+  const lineCounts = new Map();
+  for (const line of lines) lineCounts.set(line, (lineCounts.get(line) || 0) + 1);
+  if ([...lineCounts.values()].some((count) => count >= 3)) return true;
+
+  const words = cleaned.toLowerCase().match(/[a-zäöüß0-9-]+/g) || [];
+  if (words.length >= 12) {
+    const counts = new Map();
+    for (const word of words) counts.set(word, (counts.get(word) || 0) + 1);
+    const mostCommon = Math.max(...counts.values());
+    const uniqueRatio = counts.size / words.length;
+    if (mostCommon >= 6 || uniqueRatio < 0.34) return true;
+  }
+
+  return false;
+}
+
+async function runSection(engine, prompt, options) {
   engine.resetConversation();
   engine.addUserMessage(prompt);
 
   let text = '';
   try {
-    for await (const token of engine.generate({
-      temperature: 0,
-      topP: 1,
-      repPenalty: 1.08,
-      maxTokens: 240,
-    })) {
-      text += token;
-    }
+    for await (const token of engine.generate(options)) text += token;
   } finally {
     engine.resetConversation();
   }
 
-  const cleaned = text.trim();
-  if (!cleaned) {
-    throw new Error('Die lokale KI hat kein verwertbares Ergebnis geliefert.');
+  return normalizeOutput(text);
+}
+
+async function generateSection(engine, prompt) {
+  let text = await runSection(engine, prompt, {
+    temperature: 0.15,
+    topP: 0.9,
+    repPenalty: 1.22,
+    maxTokens: 90,
+  });
+
+  if (!isDegenerateOutput(text)) return text;
+
+  text = await runSection(engine, `${prompt}\n\nWichtig: Keine Wort- oder Satzwiederholungen. Formuliere einen zusammenhängenden fachlichen Text.`, {
+    temperature: 0.3,
+    topP: 0.85,
+    repPenalty: 1.35,
+    maxTokens: 80,
+  });
+
+  if (isDegenerateOutput(text)) {
+    throw new Error('Die lokale KI ist in eine Wiederholungsschleife geraten. Der Entwurf wurde verworfen statt als fehlerhafter HEB-Text angezeigt.');
   }
 
+  return text;
+}
+
+export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
+  const engine = await loadEngine(onProgress);
+  const sections = SECTION_MODES[formType] || SECTION_MODES.A;
+  const outputs = [];
+
+  for (let index = 0; index < sections.length; index += 1) {
+    const [sectionMode, sectionLabel] = sections[index];
+    setModelState({
+      status: 'generating',
+      percent: 100,
+      text: `KI formuliert ${index + 1}/${sections.length} …`,
+      error: null,
+    }, onProgress);
+
+    const prompt = buildSectionPrompt({ notes, area, formType, sectionMode, sectionLabel });
+    const sectionText = await generateSection(engine, prompt);
+    outputs.push(`${sectionLabel}\n${sectionText}`);
+  }
+
+  const finalText = outputs.join('\n\n').trim();
+  if (!finalText) throw new Error('Die lokale KI hat kein verwertbares Ergebnis geliefert.');
+
   setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
-  return cleaned;
+  return finalText;
 }
 
 export function getModelInfo() {
