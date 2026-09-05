@@ -76,14 +76,23 @@ async function loadGenerator(onProgress) {
         progress_callback: (event) => {
           if (!event) return;
           const progress = typeof event.progress === 'number' ? Math.round(event.progress) : null;
-          if (progress !== null) {
-            const bounded = Math.min(96, Math.max(8, progress));
+          if (progress === null) return;
+
+          if (progress >= 100) {
             setModelState({
               status: 'loading',
-              percent: bounded,
-              text: `KI wird geladen · ${progress}%`,
+              percent: 97,
+              text: 'Download abgeschlossen · KI wird gestartet …',
             }, onProgress);
+            return;
           }
+
+          const bounded = Math.min(95, Math.max(8, progress));
+          setModelState({
+            status: 'loading',
+            percent: bounded,
+            text: `KI-Dateien werden geladen · ${progress}%`,
+          }, onProgress);
         },
       });
 
