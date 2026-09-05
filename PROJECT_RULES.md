@@ -13,9 +13,9 @@ Diese Regeln sind für HEB-Assist verbindlich.
 
 ## 2. Git-Workflow
 
-- Keine reguläre Entwicklung direkt auf `main`.
-- Eigener Branch → Prüfung → Pull Request → Merge.
-- Änderungen an Datenschutz-, KI- oder Sicherheitsregeln müssen im PR ausdrücklich beschrieben werden.
+- Solange HEB-Assist ausdrücklich als Test-/Entwicklungsprojekt geführt wird, darf direkt auf `main` gearbeitet werden.
+- Vor einer späteren Produktivfreigabe wird der strengere Branch-/PR-Workflow wieder eingeführt.
+- Datenschutz-, KI- und Sicherheitsregeln bleiben auch während direkter Arbeit auf `main` verbindlich und müssen nachvollziehbar dokumentiert werden.
 
 ## 3. Datenschutz als technische Vorgabe
 
