@@ -37,10 +37,12 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - automatisch aktualisierende App-Shell: Update-Prüfung beim Öffnen, beim Zurückkehren in die App und regelmäßig während längerer Nutzung
 - online werden HTML/JavaScript/CSS bevorzugt frisch geladen; vorhandener Cache dient als Offline-Fallback
 - ein Update wird automatisch aktiviert, aber bei aktiver HEB-Eingabe nicht durch einen erzwungenen Neustart mit Datenverlust übernommen
-- lokales Sprachmodell: Gemma 3 270M Instruct, Q8_0
+- lokales Sprachmodell im aktuellen Qualitätstest: **Gemma 3 1B Instruct, Q8_0**
 - lokale Laufzeit: `gemma-webgpu` 0.1.0 über reines WebGPU
 - das Modell wird speicherschonend per HTTP-Range-Requests in Abschnitten geladen und direkt in GPU-Speicher übertragen; dadurch muss nicht die komplette Modelldatei gleichzeitig als JavaScript-/WASM-Speicher gehalten werden
 - Kontextlänge im aktuellen mobilen Testprofil: 1024 Tokens
+- vollständige HEB-Bereiche werden unterpunktweise erzeugt: jeder offizielle Unterpunkt erhält einen kurzen, gezielten Modellaufruf und wird anschließend in der App zusammengesetzt
+- degenerierte Wiederholungsschleifen werden erkannt und verworfen, statt als HEB-Entwurf angezeigt zu werden
 - das Eingabefeld bleibt bis zum vollständigen Modellstart gesperrt
 - klare Zustände: Laden → `KI ist bereit ✓` oder `KI nicht verfügbar`
 - bei einem Startfehler wird eine technische Fehlermeldung lokal angezeigt; sie enthält keine HEB-Eingabe
@@ -63,7 +65,7 @@ Die HEB-Eingabe wird nicht an diese Dienste zur Inferenz gesendet. Die eigentlic
 
 Die bisherigen Transformers.js-/ONNX-Runtime-Varianten konnten das Modell zwar laden, Safari wurde jedoch bei der eigentlichen autoregressiven Textgenerierung wiederholt vom Betriebssystem beendet. Das trat sowohl mit WebGPU als auch mit einem WASM-Versuch auf.
 
-Deshalb wird dieser ONNX-Pfad für iPhone/iPad nicht weiterverfolgt. Der aktuelle Testpfad verwendet stattdessen `gemma-webgpu`, dessen Gewichte schichtweise geladen werden und dessen Entwickler einen realen iPhone-17-Pro-Max-Test unter Safari/iOS 26 dokumentiert haben. Dieser neue Pfad muss auf dem realen Zielgerät noch mit HEB-Generierung verifiziert werden.
+Der Wechsel auf `gemma-webgpu` hat die Stabilität auf dem getesteten iPhone deutlich verbessert: Gemma 3 270M konnte geladen werden und die Generierung lief ohne Safari-Absturz durch. Die fachliche Ausgabe war jedoch unbrauchbar und geriet in eine starke Wiederholungsschleife. Deshalb wird nun Gemma 3 1B mit unterpunktweiser Generierung und Qualitätsprüfung getestet.
 
 ## Aktuell implementiert
 
