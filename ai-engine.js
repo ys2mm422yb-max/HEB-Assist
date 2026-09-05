@@ -16,10 +16,22 @@ const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers
 const ORT_WEB_VERSION = '1.26.0-dev.20260416-b7804b056c';
 const ORT_ASYNCIFY_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WEB_VERSION}/dist/`;
 
+const APPLE_MOBILE_SYSTEM_RULES = `Du bist HEB Assist. Formuliere professionelles, neutrales und ressourcenorientiertes Deutsch für die offiziellen HEB-Bögen A, B und C.
+Verbindlich:
+- Nutze ausschließlich Informationen aus der Eingabe. Nichts erfinden oder ergänzen.
+- Keine Diagnosen, Symptome, Fähigkeiten, Risiken, Ressourcen, Entwicklungen, Ziele, Maßnahmen oder Hilfebedarfe hinzufügen, die nicht belegt sind.
+- Keine Namen verwenden; schreibe „die leistungsberechtigte Person“ oder „die Person“.
+- Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
+- Unterstützungsbedarf konkret und wertfrei beschreiben.
+- Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt wurde.
+- HEB-Bogentyp, Bereich und geforderte Unterpunkte exakt beachten.
+- Knapp, fachlich und gut verständlich formulieren.`;
+
 let generatorPromise = null;
 let generatorInstance = null;
 let modelInfo = null;
 let activeModel = null;
+let activeRuntime = null;
 let modelState = {
   status: 'idle',
   percent: 0,
@@ -55,16 +67,18 @@ function selectModel() {
 }
 
 export function getLocalAiCapability() {
+  const appleMobile = isAppleMobileDevice();
   const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
   const model = selectModel();
   return {
     hasWebGPU,
-    supported: hasWebGPU,
+    supported: appleMobile ? true : hasWebGPU,
     safari26Plus: isSafari26Plus(),
-    appleMobile: isAppleMobileDevice(),
+    appleMobile,
     modelProfile: model.profile,
     modelLabel: model.label,
-    label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
+    runtime: appleMobile ? 'wasm' : 'webgpu',
+    label: appleMobile || hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
 
@@ -82,8 +96,18 @@ function configureRuntimeForPlatform(env) {
   env.allowLocalModels = false;
   env.useBrowserCache = true;
 
-  // Transformers.js 4.2.0 predates the upstream Safari-26 WebGPU fix.
-  // Safari >= 26 needs the asyncify ONNX Runtime Web build for WebGPU.
+  if (isAppleMobileDevice()) {
+    // Safari/iOS is currently much more stable with the plain WASM backend
+    // than with the JSEP/WebGPU path during autoregressive generation.
+    if (env.backends?.onnx?.wasm) {
+      env.backends.onnx.wasm.numThreads = 1;
+      env.backends.onnx.wasm.simd = true;
+    }
+    return;
+  }
+
+  // Desktop Safari >= 26 still needs the asyncify ONNX Runtime Web build
+  // for the WebGPU backend to initialise correctly.
   if (isSafari26Plus() && env.backends?.onnx?.wasm) {
     env.backends.onnx.wasm.wasmPaths = {
       mjs: `${ORT_ASYNCIFY_BASE}ort-wasm-simd-threaded.asyncify.mjs`,
@@ -92,12 +116,21 @@ function configureRuntimeForPlatform(env) {
   }
 }
 
-async function chooseDtype() {
+async function selectRuntime() {
+  if (isAppleMobileDevice()) {
+    return { device: 'wasm', dtype: 'q4', label: 'stabiler iPhone-/iPad-Modus' };
+  }
+
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) {
     throw new Error('WebGPU ist vorhanden, aber der Browser konnte keinen GPU-Adapter bereitstellen.');
   }
-  return adapter.features?.has('shader-f16') ? 'q4f16' : 'q4';
+
+  return {
+    device: 'webgpu',
+    dtype: adapter.features?.has('shader-f16') ? 'q4f16' : 'q4',
+    label: 'WebGPU-Modus',
+  };
 }
 
 async function loadGenerator(onProgress) {
@@ -107,7 +140,7 @@ async function loadGenerator(onProgress) {
   }
 
   if (!getLocalAiCapability().supported) {
-    const error = new Error('Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.');
+    const error = new Error('Dieses Gerät bzw. dieser Browser stellt die benötigte lokale KI-Laufzeit aktuell nicht bereit.');
     setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: error.message }, onProgress);
     throw error;
   }
@@ -123,12 +156,12 @@ async function loadGenerator(onProgress) {
       const { pipeline, env } = await import(TRANSFORMERS_URL);
       configureRuntimeForPlatform(env);
 
-      const dtype = await chooseDtype();
+      activeRuntime = await selectRuntime();
       setModelState({ status: 'loading', percent: 8, text: compactText }, onProgress);
 
       const pipe = await pipeline('text-generation', activeModel.id, {
-        device: 'webgpu',
-        dtype,
+        device: activeRuntime.device,
+        dtype: activeRuntime.dtype,
         progress_callback: (event) => {
           if (!event) return;
           const progress = typeof event.progress === 'number' ? Math.round(event.progress) : null;
@@ -157,9 +190,10 @@ async function loadGenerator(onProgress) {
         id: activeModel.id,
         label: activeModel.label,
         profile: activeModel.profile,
-        dtype,
-        device: 'webgpu',
-        safari26Workaround: isSafari26Plus(),
+        dtype: activeRuntime.dtype,
+        device: activeRuntime.device,
+        runtimeLabel: activeRuntime.label,
+        safari26Workaround: !isAppleMobileDevice() && isSafari26Plus(),
       };
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
       return pipe;
@@ -190,15 +224,23 @@ function buildMessages({ notes, area, formType, mode }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
   const instruction = getOutputInstruction(formType, mode);
   const selectedModeLabel = form.modes.find(([value]) => value === mode)?.[1] || form.modes[0][1];
+  const mobile = isAppleMobileDevice();
 
-  const examples = FEW_SHOT_EXAMPLES
-    .map((example, index) => `Beispiel ${index + 1}\nEingabe: ${example.input}\nGute fachliche Formulierung:\n${example.output}`)
-    .join('\n\n');
+  const examples = mobile
+    ? ''
+    : FEW_SHOT_EXAMPLES
+        .map((example, index) => `Beispiel ${index + 1}\nEingabe: ${example.input}\nGute fachliche Formulierung:\n${example.output}`)
+        .join('\n\n');
 
-  const userPrompt = `Ausgewählter HEB-Bogen: ${form.label}\nAusgewählter HEB-Bereich: ${area}\nAusgewähltes Feld: ${selectedModeLabel}\n\nAufgabe:\n${instruction}\n\nBeispiele für Stil und Faktentreue:\n${examples}\n\nFallbeschreibung:\n${notes}\n\nErstelle jetzt ausschließlich die fachliche Formulierung für das ausgewählte Feld. Verwende keine Vorbemerkung, keine allgemeinen Warnhinweise und keine Informationen, die nicht in der Fallbeschreibung enthalten sind.`;
+  const exampleBlock = examples ? `\n\nBeispiele für Stil und Faktentreue:\n${examples}` : '';
+  const lengthRule = mobile
+    ? '\nFormuliere kompakt. Der gesamte Entwurf soll möglichst unter 170 Wörtern bleiben.'
+    : '';
+
+  const userPrompt = `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nAusgabe: ${selectedModeLabel}\n\nAufgabe:\n${instruction}${lengthRule}${exampleBlock}\n\nFallbeschreibung:\n${notes}\n\nGib ausschließlich den fertigen fachlichen HEB-Text aus. Keine Vorbemerkung und keine zusätzlichen Tatsachen.`;
 
   return [
-    { role: 'system', content: HEB_SYSTEM_RULES },
+    { role: 'system', content: mobile ? APPLE_MOBILE_SYSTEM_RULES : HEB_SYSTEM_RULES },
     { role: 'user', content: userPrompt },
   ];
 }
@@ -219,13 +261,16 @@ function extractAssistantText(output) {
 export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
   const generator = await loadGenerator(onProgress);
   const messages = buildMessages({ notes, area, formType, mode });
+  const mobile = isAppleMobileDevice();
 
   onProgress?.({ status: 'generating', percent: 100, text: 'KI formuliert …', error: null });
 
   const output = await generator(messages, {
-    max_new_tokens: mode === 'complete' ? 420 : 260,
+    max_new_tokens: mobile ? 220 : (mode === 'complete' ? 420 : 260),
     do_sample: false,
-    repetition_penalty: 1.08,
+    repetition_penalty: 1.06,
+    return_full_text: false,
+    use_cache: true,
   });
 
   return extractAssistantText(output);
