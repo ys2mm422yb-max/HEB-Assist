@@ -9,7 +9,7 @@ Mitarbeitende beschreiben eine Situation in normaler Alltagssprache. HEB-Assist 
 ## Verbindliche Grundprinzipien
 
 - **Eigenständiges Projekt:** keine technische, inhaltliche oder datenbezogene Verbindung zu anderen Projekten.
-- **Mobile first:** iPhone, Android und Desktop werden als gleichwertige Zielplattformen behandelt.
+- **Mobile first:** iPhone, Android und Desktop werden als Zielplattformen berücksichtigt.
 - **Datensparsamkeit:** Version 1 benötigt keine zentrale Datenbank und keine Benutzerkonten.
 - **Keine Fallablage:** HEB-Eingaben und Ausgaben werden standardmäßig nicht zentral gespeichert.
 - **Lokale Verarbeitung:** Das Sprachmodell arbeitet auf dem Endgerät.
@@ -34,38 +34,57 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 
 - statische HTML/CSS/JavaScript-Web-App ohne Backend
 - Progressive Web App mit Service Worker und App-Shell-Cache
-- automatisch aktualisierende App-Shell: Update-Prüfung beim Öffnen, beim Zurückkehren in die App und regelmäßig während längerer Nutzung
-- online werden HTML/JavaScript/CSS bevorzugt frisch geladen; vorhandener Cache dient als Offline-Fallback
-- ein Update wird automatisch aktiviert, aber bei aktiver HEB-Eingabe nicht durch einen erzwungenen Neustart mit Datenverlust übernommen
-- lokales Sprachmodell im aktuellen Qualitätstest: **Gemma 3 1B Instruct, Q8_0**
-- lokale Laufzeit: `gemma-webgpu` 0.1.0 über reines WebGPU
-- das Modell wird speicherschonend per HTTP-Range-Requests in Abschnitten geladen und direkt in GPU-Speicher übertragen; dadurch muss nicht die komplette Modelldatei gleichzeitig als JavaScript-/WASM-Speicher gehalten werden
-- Kontextlänge im aktuellen mobilen Testprofil: 1024 Tokens
-- vollständige HEB-Bereiche werden unterpunktweise erzeugt: jeder offizielle Unterpunkt erhält einen kurzen, gezielten Modellaufruf und wird anschließend in der App zusammengesetzt
-- degenerierte Wiederholungsschleifen werden erkannt und verworfen, statt als HEB-Entwurf angezeigt zu werden
+- automatisch aktualisierende App-Shell über GitHub Pages
+- lokales Sprachmodell im aktuellen iPhone-Test: **Llama 3.2 1B Instruct q4f16**
+- lokale Laufzeit: **WebLLM 0.2.82** über WebGPU
+- Kontextfenster im mobilen Testprofil: 2048 Tokens
+- Modell-Cache über die Browser Cache API; der Browser bzw. iOS kann diesen Speicher unter Umständen trotzdem entfernen
 - das Eingabefeld bleibt bis zum vollständigen Modellstart gesperrt
 - klare Zustände: Laden → `KI ist bereit ✓` oder `KI nicht verfügbar`
-- bei einem Startfehler wird eine technische Fehlermeldung lokal angezeigt; sie enthält keine HEB-Eingabe
-- kein regel-/regexbasierter Ersatzmodus für HEB-Ausgaben
-- lokaler Datenschutzfilter vor jeder Formulierung
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-### Externe Netzwerkzugriffe
+## Neue Generierungsarchitektur: Quellen statt freier Fantasie
 
-Beim Laden der App bzw. des lokalen Modells werden ausschließlich statische Ressourcen abgerufen:
+Die bisherigen iPhone-Tests haben gezeigt, dass ein 1B-Modell bei freier deutscher HEB-Generierung sprachlich und fachlich unzuverlässig sein kann. Deshalb erzeugt HEB-Assist einen vollständigen HEB-Bereich nicht mehr direkt aus dem gesamten Falltext.
+
+Der aktuelle Ablauf ist zweistufig und quellengebunden:
+
+1. Die Eingabe wird lokal in Originalaussagen mit IDs wie `S1`, `S2`, `S3` zerlegt.
+2. Das vollständig gestartete lokale Sprachmodell ordnet ausschließlich diese vorhandenen Quellen-IDs den offiziellen HEB-Unterpunkten zu.
+3. Die Anwendung akzeptiert nur IDs, die tatsächlich in der Eingabe existieren.
+4. Jeder HEB-Unterpunkt wird anschließend vom selben lokalen Sprachmodell ausschließlich aus den dafür freigegebenen Originalbelegen formuliert.
+5. Eine zusätzliche lokale Qualitätsprüfung kontrolliert unter anderem:
+   - nicht belegte Ursachen
+   - wertende Formulierungen
+   - Fantasiewörter und degenerierte Bindestrichketten
+   - auffällige Zeichensetzung / Wiederholungsmuster
+   - neu eingeführte Zahlen
+   - zu viele nicht durch die Originalbelege verankerte Inhaltswörter
+   - unvollständige oder zu lange Sätze
+6. Fällt die Ausgabe durch die Prüfung, wird sie verworfen. Es erscheint **kein** regel- oder regexbasierter Ersatztext als vermeintliche KI-Ausgabe.
+
+Zusätzlich gelten fachliche Sperren: Eine bloße Situationsbeschreibung wird nicht automatisch zu einem Ziel. Bei HEB B/C darf ohne tatsächlichen zeitlichen Vergleich keine Entwicklung erfunden werden.
+
+## Externe Netzwerkzugriffe
+
+Beim Laden der App bzw. des lokalen Modells werden statische Ressourcen abgerufen:
 
 - GitHub Pages: App-Dateien
-- jsDelivr: `gemma-webgpu`-Laufzeitbibliothek
-- Hugging Face: Gemma-Modellgewichte über HTTP-Range-Requests
+- `esm.run`: WebLLM-Laufzeitbibliothek
+- die von WebLLM referenzierten Modellressourcen für das lokale Sprachmodell
 
-Die HEB-Eingabe wird nicht an diese Dienste zur Inferenz gesendet. Die eigentliche Textgenerierung läuft im Browser auf dem Endgerät. Normale Verbindungsmetadaten eines Downloads, z. B. IP-Adresse und Browserinformationen, können bei den jeweiligen Infrastrukturbetreibern technisch anfallen.
+Die HEB-Eingabe wird nicht an einen externen KI-Inferenzdienst geschickt. Die eigentliche Modellverarbeitung läuft im Browser auf dem Endgerät. Bei gewöhnlichen Dateiabrufen können technisch übliche Verbindungsmetadaten wie IP-Adresse oder Browserinformationen beim jeweiligen Infrastrukturbetreiber anfallen.
 
 ## Ergebnis der bisherigen iPhone-Gerätetests
 
-Die bisherigen Transformers.js-/ONNX-Runtime-Varianten konnten das Modell zwar laden, Safari wurde jedoch bei der eigentlichen autoregressiven Textgenerierung wiederholt vom Betriebssystem beendet. Das trat sowohl mit WebGPU als auch mit einem WASM-Versuch auf.
+Die bisherigen Tests haben mehrere Grenzen sichtbar gemacht:
 
-Der Wechsel auf `gemma-webgpu` hat die Stabilität auf dem getesteten iPhone deutlich verbessert: Gemma 3 270M konnte geladen werden und die Generierung lief ohne Safari-Absturz durch. Die fachliche Ausgabe war jedoch unbrauchbar und geriet in eine starke Wiederholungsschleife. Deshalb wird nun Gemma 3 1B mit unterpunktweiser Generierung und Qualitätsprüfung getestet.
+- größere lokale Modelle führten auf dem getesteten iPhone/Safari teils zu Speicher- bzw. Webseitenprozess-Abbrüchen
+- sehr kleine Modelle waren stabiler, lieferten aber fachlich unbrauchbare deutsche Texte
+- Llama 3.2 1B läuft auf dem Gerät stabiler als größere getestete Varianten, erzeugte im freien Generierungsmodus jedoch weiterhin erfundene oder sprachlich fehlerhafte Inhalte
+
+Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf noch mehr Prompt-Tuning, sondern auf der quellengebundenen Zwei-Stufen-Architektur mit harter Verifikation.
 
 ## Aktuell implementiert
 
@@ -77,12 +96,11 @@ Der Wechsel auf `gemma-webgpu` hat die Stabilität auf dem getesteten iPhone deu
 - automatische Struktur passend zu A, B oder C
 - sichtbarer Status des lokalen Sprachmodells
 - vollständiger Ladebildschirm bis zur einsatzbereiten KI
-- HEB-Eingabe erst nach erfolgreichem KI-Start
-- technische Fehleranzeige und manueller Neustart der KI
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
 - automatische PWA-Update-Erkennung und sichere Übernahme neuer Versionen
 - PWA-Manifest und Offline-App-Shell
 - Kopierfunktion
+- quellengebundene KI-Analyse und lokale Qualitätsprüfung
 
 ## Entwicklungsworkflow
 
@@ -90,6 +108,6 @@ Solange HEB-Assist ausdrücklich als Test-/Entwicklungsprojekt geführt wird, da
 
 ## Aktueller Status
 
-Bootstrap/Prototyp. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.**
+Prototyp / Qualitätstest. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.**
 
 Die feste Testseite wird über GitHub Pages aus `main` veröffentlicht.
