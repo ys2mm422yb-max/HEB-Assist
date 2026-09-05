@@ -43,33 +43,28 @@ Ergebnis: Freie HEB-Generierung durch ein kleines lokales 1B-Modell ist fachlich
 
 ## Aktueller Entwicklungsstand
 
-HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82**, aber die Generierungsarchitektur wurde grundlegend geändert.
+HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82**, aber die Generierungsarchitektur wurde erneut verschärft.
 
-### Quellengebundene Mikro-Generierung
+### Quellengebundene Mikro-Generierung mit Gegenprüfung
 
 1. Die Nutzereingabe wird lokal in unveränderte Originalaussagen mit IDs (`S1`, `S2`, …) zerlegt.
 2. Das vollständig gestartete lokale Sprachmodell darf zunächst nur vorhandene Quellen-IDs den offiziellen HEB-Unterpunkten zuordnen.
 3. Nicht existierende oder vom Modell erfundene IDs werden verworfen.
 4. Für die Formulierung erhält die KI immer nur **einen einzigen Originalbeleg**.
 5. Aus diesem Beleg erzeugt sie genau einen kurzen Mikrosatz.
-6. Der Mikrosatz wird gegen genau diesen Beleg geprüft. So können Fakten verschiedener Eingabestellen nicht einfach zu einer neuen Aussage vermischt werden.
-7. Nur bestandene Mikrosätze werden zu einem HEB-Unterpunkt zusammengesetzt.
-8. Scheitert eine Quellenprüfung, wird der Entwurf verworfen. Es gibt keinen regel-/regexbasierten Ersatztext als vermeintliche KI-Ausgabe.
+6. Harte lokale Regeln prüfen u. a. Ursachen, Bewertungen, Themenvermischung, Unterstützungsumfang, Zahlen, Zeichensetzung und Satzabschluss.
+7. Danach prüft dasselbe echte lokale Sprachmodell den fertigen Mikrosatz nochmals ausschließlich auf Faktentreue gegenüber diesem einen Originalbeleg und antwortet intern nur mit JA/NEIN.
+8. Nur doppelt bestandene Mikrosätze werden in den HEB-Unterpunkt übernommen.
+9. Ein einzelner verworfener Mikrosatz verwirft nicht mehr automatisch den gesamten HEB-Entwurf. Bleibt für einen HEB-Unterpunkt jedoch keine sichere Formulierung übrig, wird der Entwurf weiterhin verworfen.
+10. Es gibt keinen regel-/regexbasierten Ersatztext als vermeintliche KI-Ausgabe.
 
-Die lokale Quellenprüfung verwirft u. a.:
-
-- nicht belegte Ursachen
-- wertende Formulierungen
-- neue Zahlen
-- Fantasiewörter / degenerierte Tokenketten
-- auffällige Zeichensetzung
-- zu viele nicht durch den konkreten Originalbeleg verankerte Inhaltswörter
-- unvollständige oder deutlich zu lange Texte
+Die bisherige rein lexikalische Quellenprüfung war zu streng und hat auf dem realen iPhone auch dann den vollständigen Entwurf verworfen, wenn wahrscheinlich nur eine fachlich neutrale Paraphrase nicht wortgleich genug zur Quelle war. Deshalb dienen neue Inhaltswörter jetzt als Diagnosehinweis; die eigentliche semantische Belegtreue wird zusätzlich durch die lokale KI-Gegenprüfung abgesichert.
 
 Zusätzliche fachliche Sperren:
 
 - Eine bloße Situationsbeschreibung erzeugt kein Ziel.
 - HEB B/C erhalten ohne tatsächlichen zeitlichen Vergleich keine erfundene Entwicklung.
+- Unterstützung bei der Initiierung darf nicht in Unterstützung bei der Durchführung umgedeutet werden.
 - Pflege-/medizinische Inhalte dürfen nur erscheinen, wenn sie tatsächlich in der Eingabe stehen.
 
 ## Automatisierte Regressionstests
@@ -81,9 +76,10 @@ Der GitHub-Pages-Workflow prüft vor dem Deploy:
 
 Die Regressionstests prüfen aktuell insbesondere:
 
-- den bekannten synthetischen HEB-A-Testfall wird korrekt in sechs Originalaussagen zerlegt
+- der bekannte synthetische HEB-A-Testfall wird korrekt in sechs Originalaussagen zerlegt
 - nicht existierende Quellen-IDs werden verworfen
-- eine quellennahe Umformulierung wird akzeptiert
+- quellennahe und fachlich neutrale Paraphrasen wie „Initiierung“ werden nicht fälschlich blockiert
+- belegte Formulierungen zum Umgang mit finanziellen Mitteln werden akzeptiert
 - die erfundene Ursache „Ermüdung“ wird verworfen
 - Unterstützung beim Beginn darf nicht in Unterstützung bei der Durchführung umgedeutet werden
 - Inhalte aus verschiedenen Originalaussagen dürfen nicht vermischt werden
@@ -92,10 +88,17 @@ Die Regressionstests prüfen aktuell insbesondere:
 
 Ein fehlgeschlagener Regressionstest verhindert den GitHub-Pages-Deploy.
 
+## Darstellung
+
+- Ein automatischer Dark Mode ist implementiert. Die App folgt über `prefers-color-scheme` dem Systemmodus von iOS, Android oder Desktop.
+- Helle und dunkle Browser-/PWA-Theme-Farben sind im HTML hinterlegt.
+- Der Dark Mode ist technisch deployed, aber noch nicht auf dem realen iPhone visuell bestätigt.
+
 ## Noch nicht geprüft / keine Freigabe
 
-- neue Mikro-Generierung noch nicht mit dem bisherigen synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
+- neue KI-Gegenprüfung noch nicht mit dem bisherigen synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
 - fachliche Qualität der neuen HEB-A-Ausgabe noch nicht bewertet
+- Dark Mode noch nicht auf dem realen iPhone visuell bewertet
 - Stabilität mehrerer aufeinanderfolgender Generierungen noch nicht bewertet
 - HEB B noch nicht mit synthetischem Verlaufsfall bewertet
 - HEB C noch nicht mit synthetischem Abschlussfall bewertet
