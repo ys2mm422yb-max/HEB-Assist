@@ -1,4 +1,4 @@
-import { HEB_SYSTEM_RULES, OUTPUT_INSTRUCTIONS, FEW_SHOT_EXAMPLES } from './heb-knowledge.js';
+import { HEB_SYSTEM_RULES, HEB_FORM_CONFIG, getOutputInstruction, FEW_SHOT_EXAMPLES } from './heb-knowledge.js';
 
 const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
@@ -68,12 +68,16 @@ async function loadGenerator(onProgress) {
   return generatorPromise;
 }
 
-function buildMessages({ notes, area, mode }) {
+function buildMessages({ notes, area, formType, mode }) {
+  const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
+  const instruction = getOutputInstruction(formType, mode);
+  const selectedModeLabel = form.modes.find(([value]) => value === mode)?.[1] || form.modes[0][1];
+
   const examples = FEW_SHOT_EXAMPLES
-    .map((example, index) => `Beispiel ${index + 1}\nEingabe: ${example.input}\nGute Ausgabe:\n${example.output}`)
+    .map((example, index) => `Beispiel ${index + 1}\nEingabe: ${example.input}\nGute fachliche Formulierung:\n${example.output}`)
     .join('\n\n');
 
-  const userPrompt = `HEB-Bereich: ${area}\nGewünschte Ausgabe: ${OUTPUT_INSTRUCTIONS[mode] || OUTPUT_INSTRUCTIONS.complete}\n\nFallbeschreibung:\n${notes}\n\n${examples}\n\nErstelle jetzt ausschließlich die fachliche Ausgabe für die Fallbeschreibung. Keine Vorbemerkung, keine Warnhinweise und keine erfundenen Angaben.`;
+  const userPrompt = `Ausgewählter HEB-Bogen: ${form.label}\nAusgewählter HEB-Bereich: ${area}\nAusgewähltes Feld: ${selectedModeLabel}\n\nAufgabe:\n${instruction}\n\nBeispiele für Stil und Faktentreue:\n${examples}\n\nFallbeschreibung:\n${notes}\n\nErstelle jetzt ausschließlich die fachliche Formulierung für das ausgewählte Feld. Verwende keine Vorbemerkung, keine allgemeinen Warnhinweise und keine Informationen, die nicht in der Fallbeschreibung enthalten sind.`;
 
   return [
     { role: 'system', content: HEB_SYSTEM_RULES },
@@ -100,14 +104,14 @@ function extractAssistantText(output) {
   throw new Error('Die lokale KI hat kein verwertbares Ergebnis geliefert.');
 }
 
-export async function generateHebText({ notes, area, mode, onProgress }) {
+export async function generateHebText({ notes, area, formType, mode, onProgress }) {
   const generator = await loadGenerator(onProgress);
-  const messages = buildMessages({ notes, area, mode });
+  const messages = buildMessages({ notes, area, formType, mode });
 
   onProgress?.({ phase: 'generate', percent: 93, text: 'Formulierung wird auf diesem Gerät erstellt…' });
 
   const output = await generator(messages, {
-    max_new_tokens: mode === 'complete' ? 330 : 220,
+    max_new_tokens: mode === 'complete' ? 420 : 260,
     do_sample: false,
     repetition_penalty: 1.08,
   });
