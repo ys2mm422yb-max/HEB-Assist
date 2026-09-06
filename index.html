@@ -9,10 +9,10 @@
   <meta name="description" content="Lokaler HEB-Formulierungsassistent mit Datenschutzprüfung." />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./styles.css?build=20260906-1030" />
-  <link rel="stylesheet" href="./dark-mode.css?build=20260906-1030" />
-  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-1030" />
-  <link rel="stylesheet" href="./generation-progress.css?build=20260906-1030" />
+  <link rel="stylesheet" href="./styles.css?build=20260906-1105" />
+  <link rel="stylesheet" href="./dark-mode.css?build=20260906-1105" />
+  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-1105" />
+  <link rel="stylesheet" href="./generation-progress.css?build=20260906-1105" />
   <title>HEB Assist</title>
 </head>
 <body class="startup-locked">
@@ -21,126 +21,30 @@
       <div class="startup-brand">HEB Assist</div>
       <h1 id="startupTitle">Lokale KI wird vorbereitet</h1>
       <p id="startupText">Das Sprachmodell wird direkt auf diesem Gerät gestartet.</p>
-
-      <div id="startupProgressTrack" class="startup-progress-track" role="progressbar" aria-label="Ladefortschritt der lokalen KI" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div id="startupProgressBar" class="startup-progress-bar"></div>
-      </div>
-      <div class="startup-progress-meta">
-        <strong id="startupPercent">0 %</strong>
-        <span id="startupStage">Vorbereitung läuft …</span>
-      </div>
-
-      <p class="startup-note">Beim ersten Start wird Qwen 3 1.7B einmalig geladen und lokal im Browser gespeichert. Bei späteren Starts werden Laufzeit und Modell aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
-
-      <div id="startupError" class="startup-error" hidden>
-        <strong>Die lokale KI konnte nicht gestartet werden.</strong>
-        <p>HEB Assist bleibt gesperrt, damit kein HEB-Text ohne das Sprachmodell erzeugt wird.</p>
-        <details>
-          <summary>Technische Fehlermeldung anzeigen</summary>
-          <code id="startupErrorText"></code>
-        </details>
-      </div>
-
+      <div id="startupProgressTrack" class="startup-progress-track" role="progressbar" aria-label="Ladefortschritt der lokalen KI" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="startupProgressBar" class="startup-progress-bar"></div></div>
+      <div class="startup-progress-meta"><strong id="startupPercent">0 %</strong><span id="startupStage">Vorbereitung läuft …</span></div>
+      <p class="startup-note">Beim ersten Start wird Gemma 3 1B einmalig geladen und lokal im Browser gespeichert. Bei späteren Starts werden Laufzeit und Modell aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
+      <div id="startupError" class="startup-error" hidden><strong>Die lokale KI konnte nicht gestartet werden.</strong><p>HEB Assist bleibt gesperrt, damit kein HEB-Text ohne das Sprachmodell erzeugt wird.</p><details><summary>Technische Fehlermeldung anzeigen</summary><code id="startupErrorText"></code></details></div>
       <button id="startupRetryButton" class="primary-button startup-retry" type="button" hidden>KI erneut starten</button>
     </div>
   </section>
-
   <main id="appShell" class="app-shell" inert aria-hidden="true">
-    <header class="topbar">
-      <div>
-        <h1>HEB Assist</h1>
-        <p>Fachliche Formulierungen. Lokal verarbeitet.</p>
-      </div>
-      <div aria-label="Status der lokalen KI" style="min-width:132px;max-width:180px;display:flex;flex-direction:column;align-items:stretch;">
-        <button id="engineBadge" class="status-badge loading" type="button" aria-live="polite" style="text-align:center;">KI wird vorbereitet …</button>
-        <div id="engineProgressTrack" class="progress-track ai-progress-track" aria-hidden="true" style="width:100%;height:4px;margin:6px 0 0;">
-          <div id="engineProgressBar" class="progress-bar"></div>
-        </div>
-        <span id="engineStatusText" class="sr-only">Das Sprachmodell wird automatisch vorbereitet.</span>
-      </div>
-    </header>
-
-    <section class="privacy-strip" aria-label="Datenschutzhinweis">
-      <strong>Keine Namen oder identifizierenden Angaben eingeben.</strong>
-      <span>HEB Assist speichert in Version 1 keine Fallverläufe.</span>
-    </section>
-
+    <header class="topbar"><div><h1>HEB Assist</h1><p>Fachliche Formulierungen. Lokal verarbeitet.</p></div><div aria-label="Status der lokalen KI" style="min-width:132px;max-width:180px;display:flex;flex-direction:column;align-items:stretch;"><button id="engineBadge" class="status-badge loading" type="button" aria-live="polite" style="text-align:center;">KI wird vorbereitet …</button><div id="engineProgressTrack" class="progress-track ai-progress-track" aria-hidden="true" style="width:100%;height:4px;margin:6px 0 0;"><div id="engineProgressBar" class="progress-bar"></div></div><span id="engineStatusText" class="sr-only">Das Sprachmodell wird automatisch vorbereitet.</span></div></header>
+    <section class="privacy-strip" aria-label="Datenschutzhinweis"><strong>Keine Namen oder identifizierenden Angaben eingeben.</strong><span>HEB Assist speichert in Version 1 keine Fallverläufe.</span></section>
     <section class="workspace">
       <div class="panel input-panel">
-        <label for="reportType">HEB-Bogen</label>
-        <select id="reportType">
-          <option value="A">A – Vorläufige Hilfeplanung</option>
-          <option value="B">B – Entwicklungsbericht</option>
-          <option value="C">C – Abschlussbericht</option>
-        </select>
+        <label for="reportType">HEB-Bogen</label><select id="reportType"><option value="A">A – Vorläufige Hilfeplanung</option><option value="B">B – Entwicklungsbericht</option><option value="C">C – Abschlussbericht</option></select>
         <p id="formHint" class="quality-note">Beschreibe einfach, was aktuell gelingt, wo Unterstützung nötig ist und was ihr konkret macht. HEB Assist erstellt die passenden Punkte automatisch.</p>
-
-        <label for="area">HEB-Bereich</label>
-        <select id="area">
-          <option>1. Aufnahme und Gestaltung persönlicher, sozialer Beziehungen</option>
-          <option>2. Selbstversorgung / Wohnen</option>
-          <option>3. Arbeit / arbeitsähnliche Tätigkeiten, Ausbildung</option>
-          <option>4. Tagesgestaltung, Freizeit, Teilnahme am gesellschaftlichen Leben</option>
-          <option>5. Umgang mit den Auswirkungen der Behinderung</option>
-        </select>
-
-        <label for="notes">Situation in eigenen Worten</label>
-        <textarea id="notes" rows="9" maxlength="3500" disabled placeholder="Beispiel: Benötigt morgens häufig eine verbale Erinnerung, um mit der Körperpflege zu beginnen. Nach der Erinnerung führt die Person die Körperpflege selbstständig durch. Einkäufe werden gemeinsam geplant, die benötigten Produkte sucht die Person selbst aus."></textarea>
-        <div class="field-meta">
-          <span id="charCount">0 / 3500</span>
-          <button id="clearButton" class="text-button" type="button" disabled>Eingabe löschen</button>
-        </div>
-
-        <p class="quality-note"><strong>HEB Assist verarbeitet Eingaben nur mit vollständig gestarteter lokaler KI.</strong></p>
-
-        <div id="privacyResult" class="privacy-result" hidden></div>
-
-        <button id="generateButton" class="primary-button" type="button" disabled>HEB-Entwurf erstellen</button>
+        <label for="area">HEB-Bereich</label><select id="area"><option>1. Aufnahme und Gestaltung persönlicher, sozialer Beziehungen</option><option>2. Selbstversorgung / Wohnen</option><option>3. Arbeit / arbeitsähnliche Tätigkeiten, Ausbildung</option><option>4. Tagesgestaltung, Freizeit, Teilnahme am gesellschaftlichen Leben</option><option>5. Umgang mit den Auswirkungen der Behinderung</option></select>
+        <label for="notes">Situation in eigenen Worten</label><textarea id="notes" rows="9" maxlength="3500" disabled placeholder="Beispiel: Benötigt morgens häufig eine verbale Erinnerung, um mit der Körperpflege zu beginnen. Nach der Erinnerung führt die Person die Körperpflege selbstständig durch. Einkäufe werden gemeinsam geplant, die benötigten Produkte sucht die Person selbst aus."></textarea>
+        <div class="field-meta"><span id="charCount">0 / 3500</span><button id="clearButton" class="text-button" type="button" disabled>Eingabe löschen</button></div>
+        <p class="quality-note"><strong>HEB Assist verarbeitet Eingaben nur mit vollständig gestarteter lokaler KI.</strong></p><div id="privacyResult" class="privacy-result" hidden></div><button id="generateButton" class="primary-button" type="button" disabled>HEB-Entwurf erstellen</button>
       </div>
-
-      <div class="panel result-panel">
-        <div class="result-heading">
-          <div>
-            <span class="eyebrow">Ergebnis</span>
-            <h2>Fachlicher HEB-Entwurf</h2>
-          </div>
-          <button id="copyButton" class="secondary-button" type="button" disabled>Kopieren</button>
-        </div>
-        <div id="result" class="result-empty" aria-live="polite">
-          Noch keine Formulierung erstellt.
-        </div>
-        <p class="quality-note">Bitte fachlich prüfen. Die Anwendung darf keine nicht genannten Tatsachen ergänzen.</p>
-      </div>
+      <div class="panel result-panel"><div class="result-heading"><div><span class="eyebrow">Ergebnis</span><h2>Fachlicher HEB-Entwurf</h2></div><button id="copyButton" class="secondary-button" type="button" disabled>Kopieren</button></div><div id="result" class="result-empty" aria-live="polite">Noch keine Formulierung erstellt.</div><p class="quality-note">Bitte fachlich prüfen. Die Anwendung darf keine nicht genannten Tatsachen ergänzen.</p></div>
     </section>
-
-    <footer>
-      <span>HEB Assist · lokale Verarbeitung</span>
-      <button id="detailsButton" class="text-button" type="button">Technik & Datenschutz</button>
-    </footer>
+    <footer><span>HEB Assist · lokale Verarbeitung</span><button id="detailsButton" class="text-button" type="button">Technik & Datenschutz</button></footer>
   </main>
-
-  <dialog id="detailsDialog">
-    <div class="dialog-body">
-      <h2>Technik & Datenschutz</h2>
-      <p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist.</p>
-      <p>Die WebLLM-Laufzeit wird mit HEB Assist selbst ausgeliefert. Das Sprachmodell Qwen 3 1.7B wird beim ersten Start geladen und lokal im Browser gespeichert.</p>
-      <p>Nach erfolgreichem Erstdownload kann die KI ohne externen Inferenzserver lokal arbeiten. Offline-Betrieb ist möglich, solange Browser/PWA-Cache und Modellspeicher auf dem Gerät erhalten bleiben. iOS kann Website-Speicher unter Umständen entfernen.</p>
-      <p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
-      <p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p>
-
-      <div id="engineErrorBox" class="engine-error-box" hidden>
-        <strong>Technische Fehlermeldung</strong>
-        <code id="engineErrorText"></code>
-        <p>Diese Meldung enthält nur den technischen Startfehler der KI und keine HEB-Eingabe.</p>
-      </div>
-
-      <div class="dialog-actions">
-        <button id="retryAiButton" class="secondary-button" type="button" hidden>KI erneut starten</button>
-        <button id="closeDialog" class="primary-button" type="button">Schließen</button>
-      </div>
-    </div>
-  </dialog>
-
-  <script type="module" src="./bootstrap.js?build=20260906-1030"></script>
+  <dialog id="detailsDialog"><div class="dialog-body"><h2>Technik & Datenschutz</h2><p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist.</p><p>Die Transformers.js-/ONNX-Laufzeit wird mit HEB Assist selbst ausgeliefert. Das Sprachmodell Gemma 3 1B wird beim ersten Start geladen und lokal im Browser gespeichert.</p><p>Nach erfolgreichem Erstdownload kann die KI ohne externen Inferenzserver lokal arbeiten. Offline-Betrieb ist möglich, solange Browser/PWA-Cache und Modellspeicher auf dem Gerät erhalten bleiben. iOS kann Website-Speicher unter Umständen entfernen.</p><p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p><p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p><div id="engineErrorBox" class="engine-error-box" hidden><strong>Technische Fehlermeldung</strong><code id="engineErrorText"></code><p>Diese Meldung enthält nur den technischen Startfehler der KI und keine HEB-Eingabe.</p></div><div class="dialog-actions"><button id="retryAiButton" class="secondary-button" type="button" hidden>KI erneut starten</button><button id="closeDialog" class="primary-button" type="button">Schließen</button></div></div></dialog>
+  <script type="module" src="./bootstrap.js?build=20260906-1105"></script>
 </body>
 </html>
