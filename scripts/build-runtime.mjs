@@ -22,23 +22,15 @@ let runtime = readFileSync(transformersSource, 'utf8');
 // keys for omitted vs. explicit default options and fetch model files more than
 // once. Upstream fixed this in PR #1664. Until a newer npm release contains the
 // fix, apply that exact normalization to the locally bundled runtime.
-const buggyMemoKeyPattern = /([A-Za-z_$][\w$]*)\?\.revision,\s*\1\?\.cache_dir,\s*\1\?\.local_files_only,/g;
+const buggyMemoKeyPattern = /([A-Za-z_$][\w$]*)\?\.revision,\s*\1\?\.cache_dir,\s*\1\?\.local_files_only(?=\s*\])/g;
 const buggyMemoKeyMatches = [...runtime.matchAll(buggyMemoKeyPattern)];
 if (buggyMemoKeyMatches.length !== 1) {
-  let index = -1;
-  let seen = 0;
-  while ((index = runtime.indexOf('local_files_only', index + 1)) !== -1 && seen < 12) {
-    const start = Math.max(0, index - 320);
-    const end = Math.min(runtime.length, index + 420);
-    console.log(`TRANSFORMERS_RUNTIME_CONTEXT_${seen + 1}: ${runtime.slice(start, end).replace(/\s+/g, ' ')}`);
-    seen += 1;
-  }
-  throw new Error(`Transformers.js-4.2.0-Patch abgebrochen: erwartete Memoize-Stelle ${buggyMemoKeyMatches.length}× gefunden statt genau 1×; ${seen} Bundle-Kontexte protokolliert.`);
+  throw new Error(`Transformers.js-4.2.0-Patch abgebrochen: erwartete Memoize-Stelle ${buggyMemoKeyMatches.length}× gefunden statt genau 1×.`);
 }
 runtime = runtime.replace(buggyMemoKeyPattern, (_match, variable) => [
   `${variable}?.revision ?? 'main',`,
   `${variable}?.cache_dir ?? null,`,
-  `${variable}?.local_files_only ?? false,`,
+  `${variable}?.local_files_only ?? false`,
 ].join('\n'));
 runtime = `/* ${upstreamFixMarker} */\n${runtime}`;
 
@@ -48,6 +40,9 @@ if (forbiddenBareImport.test(runtime)) {
 }
 if (!runtime.includes(upstreamFixMarker)) {
   throw new Error('Der bestätigte Transformers.js-Doppel-Download-Fix wurde nicht in die Browser-Runtime übernommen.');
+}
+if (buggyMemoKeyPattern.test(runtime)) {
+  throw new Error('Die ungepatchte Memoize-Stelle ist nach dem Runtime-Build weiterhin vorhanden.');
 }
 if (runtime.length < 100000) {
   throw new Error('Die gebündelte Transformers.js-Browser-Runtime ist unerwartet klein.');
