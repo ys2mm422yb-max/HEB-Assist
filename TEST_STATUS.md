@@ -18,79 +18,76 @@ HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen Freig
 - automatische PWA-Aktualisierung.
 - Browser-Smoke-Tests für Chromium, WebKit sowie iPhone-/Android-ähnliche Viewports sind im GitHub-Workflow integriert.
 
-## Bisherige reale iPhone-Modelltests
+## Reale iPhone-Modelltests
 
-- größere lokale Modellvarianten führten teilweise zu Webseitenprozess-/Speicherproblemen.
-- ein früherer **Qwen-2.5-1.5B-WebLLM**-Versuch war für den damaligen iOS-Test praktisch zu schwer.
-- sehr kleine Modelle liefen stabiler, lieferten aber fachlich unbrauchbare Texte.
-- **Llama 3.2 1B Instruct** startete vergleichsweise stabil, erzeugte jedoch mehrfach grammatikalisch und fachlich unbrauchbare HEB-Ausgaben.
-- **Qwen 3 0.6B** mit Gesamtanalyse war ebenfalls nicht ausreichend. Die gewünschte fachliche Synthese war nicht zuverlässig, und die Kombination aus Thinking-Lauf plus zweitem KI-Prüflauf war auf dem realen iPhone zu langsam bzw. blieb für den Nutzer ohne brauchbare Fortschrittsanzeige lange im Zustand „KI formuliert …“.
+### Llama 3.2 1B Instruct
+
+Startete vergleichsweise stabil, erzeugte aber mehrfach grammatikalisch und fachlich unbrauchbare HEB-Ausgaben. Für die gewünschte freie HEB-Synthese nicht ausreichend.
+
+### Qwen 3 0.6B
+
+Lief auf dem iPhone grundsätzlich, war fachlich jedoch nicht zuverlässig genug. Die gewünschte semantische HEB-Synthese gelang nicht stabil; frühere Analyse-plus-Reviewer-Abläufe waren zusätzlich zu langsam.
 
 Bewertung: **Qwen 3 0.6B wird für die eigentliche HEB-Generierung nicht weiterverwendet.**
 
-## Neuer Entwicklungsstand: v10
+### Qwen 3 1.7B – v10
 
-v10 verwendet **Qwen 3 1.7B q4f16 über WebLLM 0.2.82**.
+Der neue v10-Stand wurde auf dem realen iPhone getestet.
 
-### Architektur
+Beobachtung:
 
-1. Die vollständige Eingabe wird zusammen mit HEB-Bogen, HEB-Bereich und allen offiziellen Unterpunkten in einem Modelllauf verarbeitet.
-2. Qwen 3 1.7B nutzt Thinking/Reasoning für die fachliche Gesamtanalyse.
-3. Die lokale KI soll Beziehungen zwischen Ressource, Unterstützungsbedarf und beschriebenen Unterstützungshandlungen selbst semantisch erkennen.
-4. Die Eingabe wird lediglich für nachvollziehbare Beleg-IDs in Originalaussagen zerlegt; es gibt kein regelbasiertes Quellen-Routing mehr.
-5. Jeder nicht fehlende Unterpunkt muss verwendete Originalbelege nennen.
-6. Es gibt **keinen zweiten KI-Reviewer**. Nach dem Modelllauf prüft nur lokale Sicherheitslogik auf klar erkennbare unzulässige Inhalte oder Bedeutungsverschiebungen. Diese Logik erzeugt selbst keinen HEB-Text.
-7. Die Generierung streamt lokal. Die Oberfläche zeigt einen bewegten Aktivitätsbalken, Bearbeitungszeit und die aktuelle Phase, damit laufende Berechnung und Hänger unterscheidbar sind.
-8. Eine Generierung wird nach maximal drei Minuten abgebrochen, wenn sie nicht fertig wird. Es wird kein Ersatztext erzeugt.
-9. Die WebLLM-JavaScript-Laufzeit wird beim Deploy lokal aus dem gepinnten npm-Paket bereitgestellt und von der PWA gecacht; `esm.run` oder eine andere JavaScript-CDN ist für die Laufzeit nicht mehr vorgesehen.
-10. Das neue Modell wird beim ersten Start separat geladen und von WebLLM lokal im Browser gespeichert.
+- der Modelldownload lief bis **100 %** durch.
+- direkt anschließend, beim Start/Initialisieren des Modells, brach der Safari-Webseitenprozess ab.
+- Safari zeigte anschließend: „Auf … ist wiederholt ein Problem aufgetreten.“
+- die App erreichte **nicht** den Zustand „KI ist bereit“.
+- dadurch konnte die eigentliche HEB-Generierung mit Qwen 3 1.7B auf diesem Gerät nicht getestet werden.
 
-### Erwartung für den bekannten synthetischen HEB-A-Testfall
+Die WebLLM-Referenzkonfiguration führt `Qwen3-1.7B-q4f16_1-MLC` mit rund **2036,66 MB VRAM** bei 4096 Kontext-Tokens. HEB Assist hatte das Kontextfenster bereits auf 2048 Tokens reduziert; der exakte Speicherbedarf dieses reduzierten Profils ist daher niedriger und nicht identisch mit dem Referenzwert. Der reale iPhone-Abbruch direkt nach 100 % Download ist dennoch **stark mit einem Speicher-/WebGPU-Initialisierungsproblem vereinbar**. Eine exakte iOS-Prozessspeichergrenze ist aus der PWA heraus nicht messbar, daher wird OOM nicht als mathematisch bewiesene Einzelursache behauptet.
 
-Beim Testfall mit verbalem Impuls zur Aufnahme der Körperpflege muss v10 mindestens Folgendes leisten:
+Bewertung: **Qwen 3 1.7B ist im aktuellen WebLLM/PWA-Ansatz auf dem getesteten iPhone nicht praktisch einsetzbar. Weitere identische Download-/Startversuche sind nicht sinnvoll.**
 
-- a) Situation fachlich zusammenführen und die überwiegend selbstständige Durchführung als Ressource erhalten.
-- b) Unterstützungsbedarf bei der **Initiierung** erkennen, ohne Hilfe bei der Durchführung zu erfinden.
-- c) ohne ausdrücklich genanntes Ziel transparent fehlende Angaben ausgeben.
-- d) die tatsächlich beschriebene Unterstützungshandlung fachlich benennen, ohne zusätzliche Maßnahmen zu erfinden.
-- keine Diagnose, Ursache, Bewertung, Entwicklung oder formale Hilfebedarfsstufe ergänzen.
-- keine Fantasiewörter, Wortwiederholungsschleifen oder kaputten Bindestrichketten.
+## v10 – technischer GitHub-Stand
 
-## Automatisierte Tests für v10
+GitHub-Actions-Lauf **#108** für Commit `3f48399a9c7f1ae5ce78abcecafaf793ddfd3823` ist vollständig erfolgreich abgeschlossen. GitHub Pages wurde im selben Lauf erfolgreich deployed.
 
-GitHub-Actions-Lauf **#108** für Commit `3f48399a9c7f1ae5ce78abcecafaf793ddfd3823` ist vollständig erfolgreich abgeschlossen.
+Bestanden sind unter anderem:
 
-Bestanden sind:
-
-- npm-Abhängigkeiten und lokale Bereitstellung der WebLLM-Laufzeit
+- lokale Bereitstellung der WebLLM-Laufzeit
 - JavaScript-Syntax
-- v10-Architekturcheck: Qwen 3 1.7B, lokale Runtime-Datei und keine externe JavaScript-CDN im App-Code
-- bestehende synthetische Quellen-/Sicherheitsregressionen
-- Reasoning-Parser-/Sicherheitsregressionen
-- Browser-Smoke-Tests mit Chromium und WebKit
+- v10-Architekturcheck
+- synthetische Sicherheitsregressionen
+- Chromium-/WebKit-Smoke-Tests
 - iPhone-/Android-ähnliche Layouts
 - HEB A/B/C und offizielle Hauptbereiche
-- Sperre ohne gestartete echte KI
 - Dark Mode
 - Manifest und Service Worker
-- lokale Erreichbarkeit von `vendor/webllm.js`
 
-**GitHub Pages wurde im selben Lauf erfolgreich deployed.**
+Diese Tests ersetzen keine echte iPhone-WebGPU-Inferenz. Der reale iPhone-Test hat genau diese Lücke sichtbar gemacht.
 
-Diese Tests können weiterhin keine echte iPhone-WebGPU-Inferenz und keine reale Modellqualität ersetzen.
+## Konsequenz aus v10
 
-## Für v10 noch offen
+Die bisherigen realen Tests zeigen aktuell einen Zielkonflikt im reinen Browseransatz:
 
-- Qwen 3 1.7B muss auf dem realen iPhone vollständig laden und ohne Safari-/Speicherabbruch starten.
-- nach dem Erstdownload muss geprüft werden, ob ein erneuter Start aus dem lokalen Browsercache ohne erneuten vollständigen Modelldownload funktioniert.
-- Offline-Test nach erfolgreichem Erstdownload steht aus.
-- der bekannte synthetische HEB-A-Fall muss auf dem realen iPhone fachlich bewertet werden.
-- Generierungsdauer und Verhalten des neuen Aktivitätsbalkens müssen auf dem realen iPhone geprüft werden.
-- mehrere aufeinanderfolgende Generierungen auf realem iPhone müssen geprüft werden.
-- HEB B muss mit einem synthetischen Verlaufsfall geprüft werden.
-- HEB C muss mit einem synthetischen Abschlussfall geprüft werden.
-- echter Android-WebGPU-Test steht aus.
-- echter Desktop-WebGPU-Test steht aus.
+- kleine Modelle passen eher in Safari/WebGPU, liefern aber nicht zuverlässig die gewünschte HEB-Qualität.
+- deutlich stärkere Modelle benötigen mehr Speicher; Qwen 3 1.7B scheitert auf dem getesteten iPhone bereits beim Initialisieren.
+
+Deshalb wird **nicht weiter blind an Qwen 3 1.7B gepatcht**. Vor der nächsten produktiven Modelländerung muss ein neuer lokaler KI-Weg gewählt und begründet werden.
+
+Als nächste sinnvolle Entwicklungsrichtungen werden geprüft:
+
+1. ein stärker auf HEB spezialisiertes, kleineres lokales Modell (z. B. durch Training/Feinabstimmung ausschließlich mit synthetischen HEB-Fällen), das innerhalb des iPhone-Speicherbudgets bleibt;
+2. alternativ eine native On-Device-Inferenz für Plattformen, auf denen Browser/WebGPU die benötigte Modellgröße nicht stabil trägt.
+
+Die Vorgaben bleiben unverändert: kein externer KI-Inferenzserver für Falltexte, keine echte Falldaten in Entwicklung/Tests und kein versteckter regelbasierter Ersatz-HEB.
+
+## Noch offen
+
+- Auswahl und technischer Nachweis des nächsten lokalen KI-Ansatzes.
+- echter Offline-Test mit einem Modell, das auf dem Ziel-iPhone tatsächlich vollständig startet.
+- fachliche Qualitätstests mit mehreren synthetischen HEB-A/B/C-Fällen.
+- mehrere aufeinanderfolgende Generierungen auf realem iPhone.
+- echter Android-WebGPU-Test.
+- echter Desktop-WebGPU-Test.
 
 ## Freigaberegel
 
