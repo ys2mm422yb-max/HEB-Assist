@@ -32,7 +32,7 @@ Ergebnis: Größer ist auf dem getesteten iPhone nicht automatisch besser; Stabi
 
 - Gemma 3 270M konnte stabiler laufen, erzeugte aber fachlich völlig unbrauchbare Wiederholungen und Fantasiewörter.
 - Llama 3.2 1B läuft auf dem Gerät stabiler als die größeren getesteten Varianten.
-- Im bisherigen freien Generierungsmodus erzeugte auch Llama 3.2 1B jedoch nicht akzeptable Ausgaben, u. a.:
+- Im früheren freien Generierungsmodus erzeugte auch Llama 3.2 1B nicht akzeptable Ausgaben, u. a.:
   - erfundene Ursache „Ermüdung“
   - wertende Aussage „gute Idee für die Selbstversorgung“
   - ungrammatische Formulierungen wie „muss konkreten Hilfe leisten“
@@ -41,24 +41,27 @@ Ergebnis: Größer ist auf dem getesteten iPhone nicht automatisch besser; Stabi
 
 Ergebnis: Freie HEB-Generierung durch ein kleines lokales 1B-Modell ist fachlich nicht zuverlässig genug.
 
+### Quellengebundene v4-Pipeline
+
+- Die harte Quellenbindung verhinderte, dass schlechter KI-Text angezeigt wurde.
+- Im realen iPhone-Test wurde der bekannte synthetische HEB-A-Testfall jedoch wiederholt vollständig verworfen und nur die Meldung „Der erzeugte Text hat die Qualitätsprüfung nicht bestanden“ angezeigt.
+- Damit war die Pipeline fachlich sicherer, praktisch aber noch zu streng und nicht ausreichend nutzbar.
+
 ## Aktueller Entwicklungsstand
 
-HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82**, aber die Generierungsarchitektur wurde erneut verschärft.
+HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82**. Die Generierungsarchitektur ist jetzt auf v5 umgestellt.
 
-### Quellengebundene Mikro-Generierung mit Gegenprüfung
+### Quellengebundene v5-Pipeline
 
 1. Die Nutzereingabe wird lokal in unveränderte Originalaussagen mit IDs (`S1`, `S2`, …) zerlegt.
-2. Das vollständig gestartete lokale Sprachmodell darf zunächst nur vorhandene Quellen-IDs den offiziellen HEB-Unterpunkten zuordnen.
-3. Nicht existierende oder vom Modell erfundene IDs werden verworfen.
-4. Für die Formulierung erhält die KI immer nur **einen einzigen Originalbeleg**.
-5. Aus diesem Beleg erzeugt sie genau einen kurzen Mikrosatz.
-6. Harte lokale Regeln prüfen u. a. Ursachen, Bewertungen, Themenvermischung, Unterstützungsumfang, Zahlen, Zeichensetzung und Satzabschluss.
-7. Danach prüft dasselbe echte lokale Sprachmodell den fertigen Mikrosatz nochmals ausschließlich auf Faktentreue gegenüber diesem einen Originalbeleg und antwortet intern nur mit JA/NEIN.
-8. Nur doppelt bestandene Mikrosätze werden in den HEB-Unterpunkt übernommen.
-9. Ein einzelner verworfener Mikrosatz verwirft nicht mehr automatisch den gesamten HEB-Entwurf. Bleibt für einen HEB-Unterpunkt jedoch keine sichere Formulierung übrig, wird der Entwurf weiterhin verworfen.
-10. Es gibt keinen regel-/regexbasierten Ersatztext als vermeintliche KI-Ausgabe.
-
-Die bisherige rein lexikalische Quellenprüfung war zu streng und hat auf dem realen iPhone auch dann den vollständigen Entwurf verworfen, wenn wahrscheinlich nur eine fachlich neutrale Paraphrase nicht wortgleich genug zur Quelle war. Deshalb dienen neue Inhaltswörter jetzt als Diagnosehinweis; die eigentliche semantische Belegtreue wird zusätzlich durch die lokale KI-Gegenprüfung abgesichert.
+2. Das vollständig gestartete lokale Sprachmodell ordnet ausschließlich vorhandene Quellen-IDs den offiziellen HEB-Unterpunkten zu.
+3. Für jede Formulierung erhält die KI genau einen Originalbeleg.
+4. Harte lokale Regeln blockieren u. a. erfundene Ursachen, neue Zahlen, Bedeutungsverschiebungen, Bewertungen, degenerierte Sprache und bekannte Fehlmuster.
+5. Eine zweite lokale KI-Gegenprüfung wird nur noch bei rein lexikalischer Unsicherheit eingesetzt. Harte Fehler können dadurch nicht überstimmt werden.
+6. Scheitert eine sichere Umformulierung mehrfach, darf ausschließlich der unveränderte Originalbeleg übernommen werden, sofern er selbst ein vollständiger und unauffälliger Satz ist.
+7. Diese Originalbeleg-Übernahme ist keine erfundene Ersatzformulierung; sie enthält exakt die Nutzereingabe und verhindert, dass ein fachlich korrekter Beleg nur wegen misslungener Paraphrasierung verloren geht.
+8. Kann auch der Originalbeleg nicht sicher verwendet werden, wird nur der betreffende Unterpunkt transparent als nicht sicher formulierbar markiert. Ein einzelner problematischer Mikrosatz verwirft nicht mehr automatisch den gesamten HEB.
+9. Es wird niemals ein frei erfundener regel-/regexbasierter Ersatzinhalt erzeugt.
 
 Zusätzliche fachliche Sperren:
 
@@ -78,7 +81,7 @@ Die Regressionstests prüfen aktuell insbesondere:
 
 - der bekannte synthetische HEB-A-Testfall wird korrekt in sechs Originalaussagen zerlegt
 - nicht existierende Quellen-IDs werden verworfen
-- quellennahe und fachlich neutrale Paraphrasen wie „Initiierung“ werden nicht fälschlich blockiert
+- quellennahe und fachlich neutrale Paraphrasen werden nicht fälschlich blockiert
 - belegte Formulierungen zum Umgang mit finanziellen Mitteln werden akzeptiert
 - die erfundene Ursache „Ermüdung“ wird verworfen
 - Unterstützung beim Beginn darf nicht in Unterstützung bei der Durchführung umgedeutet werden
@@ -96,8 +99,8 @@ Ein fehlgeschlagener Regressionstest verhindert den GitHub-Pages-Deploy.
 
 ## Noch nicht geprüft / keine Freigabe
 
-- neue KI-Gegenprüfung noch nicht mit dem bisherigen synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
-- fachliche Qualität der neuen HEB-A-Ausgabe noch nicht bewertet
+- v5-Pipeline noch nicht mit dem bekannten synthetischen HEB-A-Testfall auf dem realen iPhone bestätigt
+- fachliche Qualität der v5-HEB-A-Ausgabe noch nicht bewertet
 - Dark Mode noch nicht auf dem realen iPhone visuell bewertet
 - Stabilität mehrerer aufeinanderfolgender Generierungen noch nicht bewertet
 - HEB B noch nicht mit synthetischem Verlaufsfall bewertet
