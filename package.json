@@ -9,7 +9,7 @@
     "@playwright/test": "1.55.0"
   },
   "scripts": {
-    "build:runtime": "mkdir -p vendor && cp node_modules/@huggingface/transformers/dist/transformers.web.min.js vendor/transformers.js && cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.mjs vendor/ && cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.wasm vendor/",
+    "build:runtime": "mkdir -p vendor && cp node_modules/@huggingface/transformers/dist/transformers.web.min.js vendor/transformers.js && cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs vendor/ && cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm vendor/",
     "test:browser": "playwright test"
   }
 }
