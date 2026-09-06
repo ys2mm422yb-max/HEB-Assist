@@ -59,14 +59,16 @@ Die Formulare verwenden folgende Auswahl:
 5. begleitende, übende Unterstützung
 6. intensives individuelles Angebot
 
-HEB-Assist darf eine Stufe nur vorschlagen, wenn die Eingaben des Nutzers dafür ausreichend konkrete Anhaltspunkte liefern. Bei Unsicherheit soll keine Stufe erfunden werden.
+HEB-Assist darf eine formale Hilfebedarfsstufe **ausschließlich dann übernehmen bzw. ausgeben, wenn sie in der Nutzereingabe ausdrücklich genannt ist**. Aus einer beschriebenen Unterstützung, Einschränkung oder fachlichen Situation darf keine Hilfebedarfsstufe automatisch abgeleitet werden. Fehlt eine ausdrückliche Stufenangabe, wird keine Stufe ausgewählt oder ergänzt.
 
 ## Grundregeln für die KI
 
-- Ressourcen müssen sichtbar berücksichtigt werden.
+- Ressourcen müssen sichtbar berücksichtigt werden, soweit sie aus der Eingabe hervorgehen.
 - Beobachtung, Selbstaussage und fachliche Einschätzung bleiben getrennt.
-- Keine Diagnose, kein Unterstützungsbedarf und keine Zielerreichung erfinden.
+- Keine Diagnose, kein Unterstützungsbedarf, keine Entwicklung und keine Zielerreichung erfinden.
+- Ziele und Maßnahmen nur aus tatsächlich vorhandenen Angaben ableiten; keine zusätzlichen Inhalte ergänzen.
 - HEB A, B und C dürfen nicht miteinander vermischt werden.
+- Fehlen für einen offiziellen Unterpunkt ausreichende Informationen, muss dies kenntlich gemacht werden statt Inhalte zu erfinden.
 - Fachliche Formulierungen sollen in die jeweilige Formularlogik passen und kopierbar sein.
 - Keine echten Namen oder sonstigen identifizierenden Daten in Entwicklungs-, Test- oder Beispieldaten verwenden.
 
