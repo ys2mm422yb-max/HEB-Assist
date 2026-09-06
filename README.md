@@ -29,14 +29,15 @@ HEB-Assist orientiert sich an den offiziellen bayerischen HEB-Bögen für Mensch
 
 Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwendet. Die genaue Struktur steht in `HEB_REFERENCE.md`.
 
-## Technik – v11
+## Technik – v12
 
 - statische HTML/CSS/JavaScript-PWA ohne Backend
 - GitHub Pages als Test-Web-App
 - lokale Laufzeit: **Transformers.js 4.2.0 / ONNX Runtime WebGPU**
-- lokales Modell: **Gemma 3 1B**, `onnx-community/gemma-3-1b-it-ONNX`
-- Modellrevision: `a58439f40017d3b99c7d378ff525e54e0ba08ebf`
+- lokaler Modellkandidat: **Qwen 3.5 0.8B**, `onnx-community/Qwen3.5-0.8B-ONNX`
+- Modellrevision: `7126260ed8e5acbe7b5d0b84bbec84df50b63a87`
 - Quantisierung/Datentyp: `q4f16`
+- HEB-Assist fordert nur die Textkomponenten `embed_tokens` und `decoder_model_merged` an; ein Vision-Encoder wird von der Anwendung nicht für die HEB-Generierung verwendet
 - Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim Deploy lokal mit der PWA gebündelt und von GitHub Pages ausgeliefert
 - keine externe JavaScript-CDN für die KI-Laufzeit
 - Modellressourcen werden beim ersten Start von Hugging Face geladen und anschließend soweit vom Browser unterstützt lokal gecacht
@@ -44,9 +45,11 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - Eingabe bleibt bis zum vollständigen Modellstart gesperrt
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 
-## v11: zusammenhängende HEB-Synthese mit lokaler Qualitätsprüfung
+Qwen 3.5 0.8B ist aktuell **Testkandidat**. Automatisierte Browserprüfungen belegen die Runtime-/App-Architektur, aber noch nicht, dass das Modell auf dem realen Ziel-iPhone vollständig initialisiert oder fachlich ausreichend gute HEB-Texte erzeugt.
 
-1. Gemma 3 1B erhält die vollständige Situation, den gewählten HEB-Bogen, den gewählten offiziellen Bereich und alle dazugehörigen Unterpunkte gemeinsam.
+## v12: zusammenhängende HEB-Synthese mit lokaler Qualitätsprüfung
+
+1. Das lokale Sprachmodell erhält die vollständige Situation, den gewählten HEB-Bogen, den gewählten offiziellen Bereich und alle dazugehörigen Unterpunkte gemeinsam.
 2. Die Eingabe wird in Originalaussagen mit Beleg-IDs zerlegt, damit Aussagen der Ausgabe auf tatsächlich vorhandene Inhalte zurückgeführt werden können.
 3. Das Sprachmodell formuliert den HEB-Entwurf. Es darf keine nicht genannten Tatsachen ergänzen.
 4. Jeder nicht fehlende Unterpunkt muss Belege aus der Originaleingabe referenzieren.
@@ -65,6 +68,14 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - Für HEB A darf eine konkret beschriebene laufende Unterstützung als dieselbe geplante Maßnahme benannt werden, wenn aus der Eingabe ihre Fortführung hervorgeht; zusätzliche oder intensivere Maßnahmen dürfen nicht ergänzt werden.
 - Fehlen ausreichende Angaben für einen offiziellen Unterpunkt, wird die Lücke kenntlich gemacht statt Inhalt zu erfinden.
 
+## iOS-Startschutz
+
+v12 enthält einen Schutz gegen automatische Großdownload-Schleifen nach einem unerwarteten Safari-/PWA-Prozessabbruch während der Modellinitialisierung. Vor einem Modellstart wird lokal nur ein technischer Marker aus Modellprofil und Startzeit gesetzt. Wird die Seite während eines noch nicht abgeschlossenen Starts neu geladen, startet HEB-Assist den Modelldownload nicht automatisch erneut, sondern stoppt und verlangt einen bewussten manuellen Neustart.
+
+Dieser Marker enthält keinen Falltext und keine HEB-Ausgabe. Nach einem erfolgreichen Modellstart oder einem regulär abgefangenen technischen Fehler wird er wieder entfernt.
+
+Die CI prüft außerdem, dass `ai-engine.js` nur unter einer einheitlichen Modul-URL geladen wird. Dadurch teilen Bootstrap und App dieselbe KI-Instanz und denselben Ladezustand.
+
 ## Lokale Runtime und Modell-Cache
 
 Die JavaScript-KI-Laufzeit wird aus dem npm-Paket `@huggingface/transformers` beim GitHub-Actions-Deploy lokal gebündelt. Zusätzlich werden die für ONNX Runtime Web benötigten Runtime-Dateien mit der PWA ausgeliefert und über den Service Worker gecacht.
@@ -79,7 +90,10 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 
 - JavaScript-Syntaxprüfungen
 - Build der lokal gebündelten Transformers.js-/ONNX-Web-Runtime
-- v11-Architekturprüfung
+- v12-Architekturprüfung
+- Prüfung des Qwen-3.5-Textsupport-Exports der Runtime
+- Prüfung auf eine gemeinsame `ai-engine.js`-Modulinstanz
+- Prüfung des iOS-Crash-Loop-Schutzes
 - synthetische Quellen-/Sicherheits-Regressionstests
 - Reasoning-Ausgabeparser-/Sicherheitstests
 - Browser-Smoke-Tests in Chromium und WebKit
@@ -89,6 +103,8 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 - Eingabesperre ohne gestartete echte KI
 - Dark Mode und mobile Viewport-Prüfungen
 - Manifest, Service Worker und lokal ausgelieferte Runtime-Dateien
+
+Der aktuell veröffentlichte v12-Stand `781d095b88afece37c01fee9f252d2659b0d3649` hat in GitHub-Actions-Lauf #120 **28 von 28 Browser-/Mobile-Smoke-Tests** bestanden und wurde von GitHub Pages erfolgreich veröffentlicht.
 
 Ein fehlgeschlagener relevanter Test verhindert den Deploy. Diese Tests ersetzen keine echte WebGPU-Inferenz auf einem realen iPhone, Android-Gerät oder Desktop und keine fachliche Qualitätsprüfung echter Modellgenerationen mit synthetischen Fällen.
 
