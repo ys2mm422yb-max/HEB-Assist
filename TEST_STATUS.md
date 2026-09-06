@@ -23,29 +23,44 @@ Die Generierung erfolgt als zusammenhängende HEB-Synthese über die vollständi
 
 ## v11 – GitHub/Deployment
 
-Der erste v11-Lauf war wegen eines falschen Pfades zu ONNX-WebGPU-Runtime-Dateien fehlgeschlagen. Der Pfad wurde anschließend korrigiert.
+### Lauf #116
 
-Aktueller veröffentlichter App-Commit vor dieser Dokumentationsaktualisierung:
+Commit `610283efb2a7a54190854d81b0c7ff76dbba752f` korrigierte zunächst die Pfade der ONNX-WebGPU-Runtime-Dateien. GitHub-Actions-Lauf #116 war vollständig grün und wurde erfolgreich auf GitHub Pages veröffentlicht.
 
-- `610283efb2a7a54190854d81b0c7ff76dbba752f` – `Fix ONNX WebGPU runtime asset paths`
+Der anschließende reale iPhone-Test zeigte jedoch unmittelbar beim Runtime-Import den Fehler:
 
-GitHub-Actions-Lauf **#116** für diesen Commit ist vollständig erfolgreich abgeschlossen. Im Lauf wurden unter anderem bestanden:
+`Module name, 'onnxruntime-web/webgpu' does not resolve to a valid URL.`
 
-- Build der lokal gebündelten Transformers.js-/ONNX-Web-Runtime
-- JavaScript-Syntaxprüfungen
-- v11-Architekturprüfung
-- synthetische Evidence-/Sicherheitsregressionen
-- Chromium- und WebKit-Smoke-Tests
-- iPhone-/Android-ähnliche Viewports
-- insgesamt 20 Browser-Smoke-Tests
-- Erstellung und Upload des GitHub-Pages-Artefakts
-- GitHub-Pages-Deployment für exakt Commit `610283efb2a7a54190854d81b0c7ff76dbba752f`
+Damit war klar, dass noch keine Modellinitialisierung stattgefunden hatte. Ursache war, dass `transformers.web.min.js` absichtlich externe npm-Imports für ONNX Runtime enthält und ohne Bundler/Import-Map nicht als eigenständiges Browser-Modul verwendet werden darf.
 
-Der Pages-Deployment-Schritt meldete erfolgreich `success`. Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
+### Lauf #117
 
-Am 2026-09-06 wurden `README.md`, `TEST_STATUS.md`, `PRIVACY_POLICY.md` und `HEB_REFERENCE.md` auf den tatsächlichen v11-Stand synchronisiert. Diese Dokumentationskorrektur ändert keine App- oder KI-Logik.
+Commit `a013da4f7ec772785831d487a9be8e7fc68de5ac` ergänzte erstmals einen echten Browser-Modulimport-Test. Dieser Lauf wurde korrekt **nicht deployed**, weil der Test einen weiteren nicht aufgelösten Import `onnxruntime-common` erkannte. Ergebnis: 20 Tests bestanden, 4 neue Runtime-Import-Tests schlugen fehl. Dadurch wurde ein fehlerhafter neuer Pages-Stand verhindert.
 
-Diese automatisierten Tests beweisen **nicht**, dass die echte Gemma-3-WebGPU-Inferenz auf einem realen iPhone stabil startet oder fachlich ausreichend gute HEB-Texte erzeugt.
+### Lauf #118 – aktuell veröffentlichter App-Stand
+
+Commit `2b9b297f25bc6a1c4ec094183cb8c195e825e3f2` stellt den Runtime-Build auf die von Transformers.js selbst erzeugte **gebündelte Browser-Datei `transformers.min.js`** um. Die vorher verwendete `transformers.web.min.js` wird für HEB Assist nicht mehr als Browser-Runtime ausgeliefert.
+
+GitHub-Actions-Lauf **#118** ist vollständig erfolgreich abgeschlossen:
+
+- offizielle gebündelte Transformers.js-Browser-Runtime vorbereitet
+- JavaScript-Syntaxprüfungen bestanden
+- v11-Architekturprüfung bestanden
+- synthetische Evidence-/Sicherheitsregressionen bestanden
+- echter Browser-Modulimport der lokalen Transformers.js-Runtime ohne npm-Auflösungsfehler bestanden
+- Chromium und WebKit bestanden
+- Android-ähnlicher Chromium-Viewport bestanden
+- iPhone-ähnlicher WebKit-Viewport bestanden
+- **24 von 24 Browser-Smoke-Tests bestanden**
+- GitHub-Pages-Artefakt erfolgreich erstellt und hochgeladen
+- Pages-Deployment für exakt Commit `2b9b297f25bc6a1c4ec094183cb8c195e825e3f2` erstellt
+- GitHub Pages meldete anschließend ausdrücklich `success`
+
+Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
+
+Diese automatisierten Tests beweisen weiterhin **nicht**, dass die echte Gemma-3-WebGPU-Modellinitialisierung auf dem realen Ziel-iPhone stabil durchläuft oder fachlich ausreichend gute HEB-Texte erzeugt. Sie belegen aber, dass der zuvor reproduzierbare Browser-Modulimportfehler in den getesteten Chromium-/WebKit-Umgebungen nicht mehr auftritt.
+
+Reine spätere Markdown-Dokumentationsänderungen lösen keinen Pages-Deploy aus und verändern den veröffentlichten App-Code nicht.
 
 ## Reale iPhone-Modelltests – bisherige Erkenntnisse
 
@@ -65,11 +80,17 @@ Der Modelldownload lief auf dem realen iPhone bis 100 %. Direkt beim anschließe
 
 Bewertung: **Qwen 3 1.7B im damaligen WebLLM/PWA-Ansatz ist auf dem getesteten iPhone nicht praktisch einsetzbar.** Dieser Weg wurde beendet.
 
+### Gemma 3 1B – v11, erster realer iPhone-Versuch
+
+Der erste reale iPhone-Versuch mit v11 scheiterte noch vor dem Modelldownload am Browser-Modulimport mit `onnxruntime-web/webgpu does not resolve to a valid URL`. Dieser konkrete Runtime-Buildfehler wurde mit Commit `2b9b297f...` korrigiert und ist in den automatischen Browser-Modulimport-Tests nicht mehr reproduzierbar.
+
+Der reale iPhone-Retest mit dem korrigierten Build steht noch aus.
+
 ## Noch nicht geprüft – v11
 
-Für Gemma 3 1B / Transformers.js v11 fehlt aktuell noch der entscheidende reale Gerätetest. Noch offen sind insbesondere:
+Für Gemma 3 1B / Transformers.js v11 fehlen aktuell noch insbesondere:
 
-- vollständiger Modellstart auf dem realen Ziel-iPhone bis „KI ist bereit“
+- vollständiger Modellstart auf dem realen Ziel-iPhone bis „KI ist bereit“ mit dem korrigierten Build `2b9b297f...`
 - eine vollständige HEB-Generierung mit einem rein synthetischen Fall
 - fachliche Qualität des Ergebnisses einschließlich Grammatik, HEB-Struktur, Ressourcenorientierung und fehlender Erfindungen
 - mehrere aufeinanderfolgende Generierungen auf dem realen iPhone
