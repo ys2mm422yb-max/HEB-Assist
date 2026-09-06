@@ -1,0 +1,179 @@
+/* Automatic system theme. No manual switch is required. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    color: #e8efed;
+    background: #0f1514;
+    --accent: #2aa69a;
+    --accent-dark: #238f85;
+    --surface: #161e1c;
+    --muted: #a1aeaa;
+    --border: #2c3936;
+    --soft: #20302d;
+    --danger: #ff8f86;
+    --danger-soft: #3a1f1d;
+  }
+
+  body {
+    background: linear-gradient(180deg, #0d1917 0, #111817 260px, #0f1514 100%);
+  }
+
+  .startup-gate {
+    background:
+      radial-gradient(circle at 50% 18%, rgba(42, 166, 154, .12), transparent 38%),
+      linear-gradient(180deg, #0d1917 0%, #111817 100%);
+  }
+
+  .startup-brand,
+  .startup-card h1,
+  .topbar h1,
+  .result-heading h2,
+  label,
+  legend {
+    color: #edf4f2;
+  }
+
+  .startup-card > p,
+  .startup-progress-meta,
+  .topbar p,
+  .field-meta,
+  .progress-wrap,
+  .quality-note,
+  footer,
+  .dialog-body p {
+    color: #a1aeaa !important;
+  }
+
+  .startup-progress-track,
+  .progress-track {
+    background: #273431;
+  }
+
+  .startup-note,
+  .privacy-strip,
+  .ai-status-strip {
+    border-color: #2d413d;
+    background: rgba(22, 30, 28, .82);
+    color: #cbd6d3;
+  }
+
+  .startup-note { color: #aab6b2 !important; }
+  .privacy-strip strong { color: #8ad8cf; }
+
+  .panel,
+  dialog,
+  .heb-result-section {
+    background: #161e1c;
+    border-color: #2c3936;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+  }
+
+  select,
+  textarea,
+  .choice-grid label {
+    border-color: #35433f;
+    background: #111817;
+    color: #edf4f2;
+  }
+
+  textarea::placeholder { color: #74817d; }
+
+  textarea:disabled {
+    background: #18211f;
+    color: #74817d;
+    -webkit-text-fill-color: #74817d;
+  }
+
+  select:focus,
+  textarea:focus {
+    border-color: #4cb9ae;
+    background: #131c1a;
+    box-shadow: 0 0 0 4px rgba(42, 166, 154, .15);
+  }
+
+  .status-badge {
+    border-color: #315c56;
+    background: #142723;
+    color: #8ad8cf;
+  }
+
+  .status-badge.loading {
+    border-color: #395266;
+    background: #15222c;
+    color: #a8cae1;
+  }
+
+  .status-badge.ready {
+    border-color: #376c64;
+    background: #142b27;
+    color: #8ad8cf;
+  }
+
+  .status-badge.warning {
+    border-color: #705b35;
+    background: #2b2417;
+    color: #f2c46f;
+  }
+
+  .secondary-button {
+    background: #20302d;
+    color: #8ad8cf;
+  }
+
+  .text-button { color: #77c9c0; }
+
+  .result-heading { border-bottom-color: #293633; }
+
+  .result-empty {
+    border-color: #33413e;
+    background: #121a18;
+    color: #83918d;
+  }
+
+  .result-ready { color: #e1e9e7; }
+
+  .heb-result-meta {
+    border-color: #31504a;
+    background: #152522;
+  }
+
+  .heb-result-meta-label { color: #84b9b2; }
+  .heb-result-meta-area { color: #e4ecea; }
+
+  .heb-result-section {
+    background: #121917;
+    border-color: #30403c;
+  }
+
+  .heb-result-section-head {
+    border-bottom-color: #30403c;
+    background: #1b2926;
+  }
+
+  .heb-result-section-letter {
+    background: #21413c;
+    color: #8ad8cf;
+  }
+
+  .heb-result-section-titles h3 { color: #e3ece9; }
+  .heb-result-section-titles span { color: #9daba7; }
+  .heb-result-section-body p { color: #dce5e2; }
+
+  .quality-note { border-top-color: #293633; }
+
+  dialog::backdrop { background: rgba(0, 0, 0, .62); }
+
+  .engine-error-box,
+  .startup-error,
+  .privacy-result {
+    border-color: #7b413b;
+    background: #351e1c;
+    color: #ffaaa2;
+  }
+
+  .engine-error-box code,
+  .startup-error code {
+    background: rgba(0, 0, 0, .22);
+    color: #ffd3cf;
+  }
+}
