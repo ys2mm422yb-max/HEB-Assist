@@ -58,3 +58,13 @@ Diese Regeln sind für HEB-Assist verbindlich.
 - Ein Update darf keine aktive HEB-Eingabe oder noch nicht kopierte Ausgabe durch einen erzwungenen Neustart verlieren lassen.
 - Wenn während aktiver Arbeit eine neue Version bereitsteht, wird sie automatisch beim nächsten sicheren Zeitpunkt bzw. beim nächsten frischen Öffnen übernommen.
 - Kolleginnen und Kollegen sollen weder Cache leeren noch die PWA neu installieren müssen, um eine neue Version zu erhalten.
+
+## 8. GitHub-Pflege und Nachvollziehbarkeit
+
+- GitHub ist die verbindliche technische Quelle für HEB-Assist und muss bei jeder technischen Änderung mitgepflegt werden.
+- Vor Änderungen ist der aktuelle Stand der betroffenen Dateien und des aktuellen Workflows zu prüfen.
+- Nach Änderungen sind Code, Tests, Dokumentation und `TEST_STATUS.md` so zu aktualisieren, dass der tatsächliche Stand nachvollziehbar bleibt.
+- Neue bekannte Fehler, fehlgeschlagene Tests und noch nicht geprüfte Punkte werden transparent dokumentiert und nicht als erledigt markiert.
+- Eine Änderung gilt erst dann als erfolgreich veröffentlicht, wenn der zugehörige GitHub-Actions-Lauf erfolgreich abgeschlossen und der Pages-Deploy tatsächlich erfolgt ist.
+- Automatisierte Tests sollen vor dem Deploy laufen und einen Release blockieren, wenn ein relevanter Kern-, Mobile-, Datenschutz- oder Qualitätscheck fehlschlägt.
+- Commits, Dokumentation und Tests dürfen ausschließlich vollständig synthetische, nicht identifizierende Beispiele enthalten.
