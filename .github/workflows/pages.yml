@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Prepare local WebLLM runtime
+      - name: Prepare local Transformers.js runtime
         run: npm run build:runtime
 
       - name: Check JavaScript syntax
@@ -70,12 +70,19 @@ jobs:
           node --check tests/reasoning-pipeline.test.mjs
           node --check tests/browser/app-shell.spec.mjs
 
-      - name: Check v10 local-runtime architecture
+      - name: Check v11 local-runtime architecture
         run: |
-          grep -q "Qwen3-1.7B-q4f16_1-MLC" ai-engine.js
-          grep -q "./vendor/webllm.js" ai-engine.js
+          grep -q "onnx-community/gemma-3-1b-it-ONNX" ai-engine.js
+          grep -q "./vendor/transformers.js" ai-engine.js
+          test -s vendor/transformers.js
+          test -s vendor/ort-wasm-simd-threaded.jsep.mjs
+          test -s vendor/ort-wasm-simd-threaded.jsep.wasm
           if grep -R -nE "esm\.run|cdn\.jsdelivr\.net|unpkg\.com" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
             echo "Externe JavaScript-CDN in App-Code gefunden."
+            exit 1
+          fi
+          if grep -R -n "Qwen3-1.7B-q4f16_1-MLC" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
+            echo "Nicht mehr zulässiges 1.7B-WebLLM-Modell im App-Code gefunden."
             exit 1
           fi
 
@@ -101,7 +108,9 @@ jobs:
           cp index.html styles.css dark-mode.css mobile-fixes.css generation-progress.css _site/
           cp bootstrap.js app.js ai-engine.js evidence-pipeline.js reasoning-pipeline.js privacy-filter.js heb-knowledge.js _site/
           cp manifest.webmanifest icon.svg sw.js _site/
-          cp vendor/webllm.js _site/vendor/webllm.js
+          cp vendor/transformers.js _site/vendor/
+          cp vendor/ort-wasm-simd-threaded.jsep.mjs _site/vendor/
+          cp vendor/ort-wasm-simd-threaded.jsep.wasm _site/vendor/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
