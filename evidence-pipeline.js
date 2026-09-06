@@ -108,6 +108,25 @@ export function parseEvidenceClassification(text, modes, units, limits = {}) {
   return result;
 }
 
+// Kleine lokale Modelle halten ein mehrzeiliges Zuordnungsformat nicht immer
+// zuverlässig ein. Für die neue Einzelaussagen-Klassifikation reicht es, die
+// erlaubten Schlüssel robust aus einer sehr kurzen Modellantwort zu extrahieren.
+export function parseUnitModeClassification(text, modes) {
+  const source = String(text || '')
+    .replace(/```[a-z]*\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
+  if (!source || /^(?:none|keine|kein|nichts)\b/i.test(source)) return [];
+
+  const found = [];
+  for (const mode of modes || []) {
+    const escaped = String(mode).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`(^|[^A-Za-z])${escaped}([^A-Za-z]|$)`, 'i');
+    if (pattern.test(source) && !found.includes(mode)) found.push(mode);
+  }
+  return found;
+}
+
 export function getEvidenceTexts(units, ids) {
   const byId = new Map(units.map((unit) => [unit.id, unit.text]));
   return (ids || []).map((id) => byId.get(id)).filter(Boolean);
