@@ -1,3 +1,4 @@
+import * as webllm from './vendor/webllm.js';
 import { HEB_FORM_CONFIG } from './heb-knowledge.js';
 import { splitEvidenceUnits, evidenceCatalog } from './evidence-pipeline.js';
 import {
@@ -8,82 +9,76 @@ import {
   validateReasonedSection,
 } from './reasoning-pipeline.js';
 
-const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.82';
-const MODEL_KEY = 'Qwen3-0.6B-q4f16_1-MLC';
-const MODEL_LABEL = 'Qwen 3 0.6B';
-const MODEL_PROFILE = 'webllm-qwen3-0.6b-thinking-heb-v9-ctx2048';
+const MODEL_KEY = 'Qwen3-1.7B-q4f16_1-MLC';
+const MODEL_LABEL = 'Qwen 3 1.7B';
+const MODEL_PROFILE = 'webllm-qwen3-1.7b-thinking-heb-v10-ctx2048';
 const CONTEXT_WINDOW_SIZE = 2048;
-const LEGACY_MODEL_KEY = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+const PREFILL_CHUNK_SIZE = 128;
+const GENERATION_TIMEOUT_MS = 180_000;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
-const UNSAFE_TEXT = 'Die vorhandenen Angaben konnten für diesen Unterpunkt nicht sicher formuliert werden.';
 
-// Architektur v9
-// ---------------
-// Kein regelbasiertes Quellenrouting mehr. Die lokale KI liest die komplette
-// Eingabe im Zusammenhang und nutzt den Qwen3-Thinking-Modus für eine echte
-// semantische Fallanalyse. Danach prüft dieselbe lokale KI den ersten Entwurf
-// nochmals gegen die Originalaussagen. Lokale Regeln schreiben keinen HEB-Text;
-// sie prüfen nur Struktur, Quellen-IDs und klar erkennbare Sicherheitsfehler.
+const LEGACY_MODEL_KEYS = [
+  'Qwen3-0.6B-q4f16_1-MLC',
+  'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+];
+
+// v10: Ein stärkeres lokales Modell übernimmt die komplette fachliche Synthese
+// in genau einem Modelllauf. Regeln erzeugen keinen HEB-Text und es gibt keinen
+// zweiten KI-Reviewer. Die lokale Nachprüfung blockiert nur klar unzulässige
+// Ausgaben (z. B. erfundene Ursachen, Bedeutungsverschiebungen, Degeneration).
 
 const SECTION_DEFS = {
   A: [
-    ['a', 'a) Aktuelle Situation bzw. Problemlage unter Berücksichtigung der Ressourcen', 100],
-    ['b', 'b) Einschätzung des Hilfebedarfs', 65],
-    ['c', 'c) Rahmenziele für den Planungszeitraum', 52],
-    ['d', 'd) Beschreibung der geplanten Maßnahmen', 82],
+    ['a', 'a) Aktuelle Situation bzw. Problemlage unter Berücksichtigung der Ressourcen', 75],
+    ['b', 'b) Einschätzung des Hilfebedarfs', 45],
+    ['c', 'c) Rahmenziele für den Planungszeitraum', 45],
+    ['d', 'd) Beschreibung der geplanten Maßnahmen', 60],
   ],
   B: [
-    ['a', 'a) Reflexion der durchgeführten Maßnahmen', 80],
-    ['b', 'b) Beschreibung der Entwicklung innerhalb des letzten Planungszeitraumes anhand der Rahmenziele unter Berücksichtigung der Ressourcen', 100],
-    ['c', 'c) Einschätzung des Hilfebedarfs', 65],
-    ['d', 'd) Fortschreibung der Rahmenziele', 52],
-    ['e', 'e) Beschreibung der geplanten Maßnahmen', 82],
+    ['a', 'a) Reflexion der durchgeführten Maßnahmen', 60],
+    ['b', 'b) Beschreibung der Entwicklung innerhalb des letzten Planungszeitraumes anhand der Rahmenziele unter Berücksichtigung der Ressourcen', 80],
+    ['c', 'c) Einschätzung des Hilfebedarfs', 45],
+    ['d', 'd) Fortschreibung der Rahmenziele', 45],
+    ['e', 'e) Beschreibung der geplanten Maßnahmen', 60],
   ],
   C: [
-    ['a', 'a) Reflexion der durchgeführten Maßnahmen im letzten Förderzeitraum', 80],
-    ['b', 'b) Beschreibung der Entwicklung anhand der Rahmenziele unter Berücksichtigung der Ressourcen', 96],
-    ['c', 'c) Einschätzung des noch bestehenden Hilfebedarfs', 65],
-    ['d', 'd) Welche weiteren Maßnahmen sind vorgesehen', 78],
-    ['e', 'e) Durch wen werden diese Maßnahmen erbracht', 48],
+    ['a', 'a) Reflexion der durchgeführten Maßnahmen im letzten Förderzeitraum', 60],
+    ['b', 'b) Beschreibung der Entwicklung anhand der Rahmenziele unter Berücksichtigung der Ressourcen', 75],
+    ['c', 'c) Einschätzung des noch bestehenden Hilfebedarfs', 45],
+    ['d', 'd) Welche weiteren Maßnahmen sind vorgesehen', 55],
+    ['e', 'e) Durch wen werden diese Maßnahmen erbracht', 38],
   ],
 };
 
-const FORMAT_INSTRUCTION = `Nutze für jeden Unterpunkt exakt dieses Format:
+const SYSTEM_PROMPT = `Du formulierst HEB-Texte für die sozialpsychiatrische Eingliederungshilfe in Deutschland.
+Arbeite fachlich, neutral, knapp, ressourcenorientiert und gut verständlich. Lies die gesamte Situation im Zusammenhang und bilde daraus eine echte fachliche Synthese statt die Eingabe Satz für Satz umzuschreiben.
+
+Verbindliche Regeln:
+- Nur Tatsachen verwenden, die in den Originalaussagen stehen oder unmittelbar daraus fachlich folgen.
+- Keine Diagnose, Ursache, Motivation, Symptomatik, Fähigkeit, Entwicklung, Ziel, Maßnahme, Hilfebedarfsstufe oder Anbieter erfinden.
+- Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
+- Unterstützungsbedarf präzise auf den beschriebenen Teil einer Handlung begrenzen. Ein Impuls zum Beginn bedeutet nicht automatisch Hilfe bei der Durchführung.
+- Gleichzeitig erkennbare Ressourcen ausdrücklich erhalten.
+- HEB B/C: ohne zeitlichen Vergleich keine Entwicklung behaupten.
+- Fehlt eine Angabe für einen Unterpunkt, TEXT exakt: ${MISSING_TEXT}
+- Keine Bewertungen wie „gute Idee“, keine Meta-Kommentare, keine Markdown-Listen und keine Fantasiewörter.
+- Keine formale Hilfebedarfsstufe auswählen, wenn sie nicht ausdrücklich genannt ist.
+
+HEB A: Wenn eine konkrete laufende Unterstützungshandlung beschrieben ist, darf sie unter d) fachlich als Maßnahme benannt werden, aber ausschließlich in derselben beschriebenen Form. Keine zusätzliche oder intensivere Maßnahme ergänzen.
+
+Denke intern über Zusammenhänge nach. Die sichtbare Antwort darf ausschließlich aus den verlangten SECTION-Blöcken bestehen.`;
+
+const FORMAT_INSTRUCTION = `Für jeden Unterpunkt exakt:
 <SECTION_A>
-STATUS:supported|missing|context_only|ambiguous
+STATUS:supported|missing|ambiguous
 EVIDENCE:S1,S2
 TEXT:fachlicher Text
 </SECTION_A>
-
-Danach SECTION_B usw. bis zum letzten Unterpunkt. Keine anderen sichtbaren Ausgaben außerhalb dieser Blöcke.`;
-
-const REASONING_SYSTEM = `Du bist ein fachlich arbeitender HEB-Assistent für die sozialpsychiatrische Eingliederungshilfe.
-Analysiere die gesamte Eingabe im Zusammenhang und denke zuerst fachlich darüber nach, was tatsächlich beschrieben ist, welche Ressourcen sichtbar sind, welcher Unterstützungsbedarf daraus hervorgeht und was ausdrücklich fehlt.
-Du darfst fachliche Bedeutungen aus ausdrücklich beschriebenen Tatsachen erkennen. Beispiel: Wenn eine Person einen verbalen Impuls braucht, um eine Tätigkeit zu beginnen, besteht Unterstützungsbedarf bei der Initiierung; wenn sie danach selbstständig handelt, bleibt genau diese Selbstständigkeit als Ressource erhalten.
-Du darfst niemals Diagnosen, Symptome, Ursachen, Motive, Fähigkeiten, Risiken, Entwicklungen, Ziele, Maßnahmen, Hilfebedarfsstufen oder Anbieter erfinden.
-Beobachtung, Selbstaussage und fachliche Einschätzung nicht vermischen.
-Ein aktuell beschriebenes Unterstützungsverhalten ist nicht automatisch eine zukünftige Planung.
-Fehlt ein Ziel oder eine Zukunftsplanung, kennzeichne das transparent statt etwas zu erfinden.
-Bei HEB B/C darf ohne echten zeitlichen Vergleich keine Entwicklung behauptet werden.
-Formuliere natürliches, professionelles, neutrales, ressourcenorientiertes Deutsch. Kopiere die Eingabe nicht bloß Satz für Satz, sondern fasse fachlich zusammen.
-Die sichtbare Endantwort muss ausschließlich im vorgegebenen SECTION-Format erfolgen.`;
-
-const REVIEW_SYSTEM = `Du bist die fachliche Qualitätsprüfung eines HEB-Entwurfs.
-Lies die Originalaussagen und den ersten Entwurf vollständig. Prüfe jeden Unterpunkt auf Tatsachentreue, fachliche Zuordnung, Widersprüche, Bedeutungsverschiebungen und Sprache.
-Korrigiere jeden problematischen Abschnitt direkt. Besonders streng prüfen:
-- vorhandener Unterstützungsbedarf darf niemals verneint werden,
-- Unterstützung beim Beginn darf nicht zu Unterstützung bei der Durchführung werden,
-- vorhandene Selbstständigkeit darf nicht abgeschwächt werden,
-- Ziele, Entwicklungen, Anbieter und formale Hilfebedarfsstufen dürfen nicht erfunden werden,
-- aktuelle Unterstützungen dürfen nicht als zukünftige Maßnahmen ausgegeben werden, wenn ihre Fortführung nicht ausdrücklich angegeben ist.
-Wenn Informationen für einen Unterpunkt fehlen, TEXT exakt: Hierzu liegen keine ausreichenden Angaben vor.
-Wenn aktuelle Maßnahmen beschrieben sind, aber keine ausdrückliche Zukunftsplanung vorliegt, nutze STATUS:context_only und benenne die aktuell beschriebenen Unterstützungen fachlich; sage zugleich knapp, dass die Fortführung im Planungszeitraum nicht ausdrücklich angegeben ist.
-Die sichtbare Endantwort muss ausschließlich im vorgegebenen SECTION-Format erfolgen.`;
+Danach SECTION_B usw. Keine Ausgabe außerhalb der SECTION-Blöcke.`;
 
 let enginePromise = null;
 let engineInstance = null;
 let modelInfo = null;
-let webllmModule = null;
 let appConfig = null;
 let modelState = { status: 'idle', percent: 0, text: 'KI wird vorbereitet …', error: null };
 
@@ -99,7 +94,7 @@ export function getLocalAiCapability() {
     supported: hasWebGPU,
     modelProfile: MODEL_PROFILE,
     modelLabel: MODEL_LABEL,
-    runtime: 'webllm',
+    runtime: 'webllm-local-bundle',
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
@@ -136,11 +131,8 @@ function mapInitProgress(report, onProgress, fromCache) {
   }, onProgress);
 }
 
-async function prepareRuntime(onProgress) {
-  if (webllmModule && appConfig) return { webllm: webllmModule, appConfig };
-
-  setModelState({ status: 'loading', percent: 3, text: 'Lokale KI-Laufzeit wird vorbereitet …', error: null }, onProgress);
-  const webllm = await import(WEBLLM_URL);
+function buildAppConfig() {
+  if (appConfig) return appConfig;
   const modelList = webllm.prebuiltAppConfig.model_list.map((entry) => {
     if (entry.model_id !== MODEL_KEY) return entry;
     return {
@@ -148,30 +140,29 @@ async function prepareRuntime(onProgress) {
       overrides: {
         ...(entry.overrides || {}),
         context_window_size: CONTEXT_WINDOW_SIZE,
+        prefill_chunk_size: PREFILL_CHUNK_SIZE,
       },
     };
   });
 
-  const config = { ...webllm.prebuiltAppConfig, model_list: modelList };
-  if (!config.model_list.some((entry) => entry.model_id === MODEL_KEY)) {
-    throw new Error(`Das lokale Modell ${MODEL_KEY} wird von WebLLM 0.2.82 nicht unterstützt.`);
+  if (!modelList.some((entry) => entry.model_id === MODEL_KEY)) {
+    throw new Error(`Das lokale Modell ${MODEL_KEY} wird von der eingebauten WebLLM-Laufzeit nicht unterstützt.`);
   }
 
-  try { await navigator.storage?.persist?.(); } catch { /* optionale Browser-Optimierung */ }
-  webllmModule = webllm;
-  appConfig = config;
-  return { webllm, appConfig: config };
+  appConfig = { ...webllm.prebuiltAppConfig, model_list: modelList };
+  return appConfig;
 }
 
-async function cleanupLegacyModelCache(webllm, config) {
+async function cleanupLegacyModelCaches(config) {
   try {
-    const key = 'heb-assist-model-cache-v9-cleaned';
+    const key = 'heb-assist-model-cache-v10-cleaned';
     if (globalThis.localStorage?.getItem(key) === '1') return;
-    await webllm.deleteModelAllInfoInCache?.(LEGACY_MODEL_KEY, config);
+    for (const legacyKey of LEGACY_MODEL_KEYS) {
+      try { await webllm.deleteModelAllInfoInCache?.(legacyKey, config); } catch { /* optional */ }
+    }
     globalThis.localStorage?.setItem(key, '1');
   } catch {
-    // Technische Cache-Bereinigung ist optional und darf die einsatzbereite KI
-    // nicht wieder blockieren.
+    // Die Bereinigung alter Testmodelle darf die aktuelle KI nie blockieren.
   }
 }
 
@@ -189,7 +180,10 @@ async function loadEngine(onProgress) {
 
   if (!enginePromise) {
     enginePromise = (async () => {
-      const { webllm, appConfig: config } = await prepareRuntime(onProgress);
+      setModelState({ status: 'loading', percent: 2, text: 'Lokale KI-Laufzeit wird vom Gerät geladen …', error: null }, onProgress);
+      const config = buildAppConfig();
+      try { await navigator.storage?.persist?.(); } catch { /* optional */ }
+
       let cached = false;
       try { cached = await webllm.hasModelInCache(MODEL_KEY, config); } catch { cached = false; }
 
@@ -198,7 +192,7 @@ async function loadEngine(onProgress) {
         percent: 4,
         text: cached
           ? 'Gespeichertes Sprachmodell wird auf dem Gerät gestartet …'
-          : 'Neues Sprachmodell wird beim ersten Start heruntergeladen und lokal zwischengespeichert …',
+          : 'Qwen 3 1.7B wird einmalig heruntergeladen und lokal gespeichert …',
         error: null,
       }, onProgress);
 
@@ -214,13 +208,15 @@ async function loadEngine(onProgress) {
         label: MODEL_LABEL,
         profile: MODEL_PROFILE,
         device: 'webgpu',
-        runtimeLabel: 'WebLLM 0.2.82',
+        runtimeLabel: 'WebLLM 0.2.82 · lokal gebündelt',
         persistentCache: 'Browser-Cache',
         contextLength: CONTEXT_WINDOW_SIZE,
-        pipeline: 'Qwen3 Thinking-Fallanalyse → lokale KI-Gegenprüfung',
+        prefillChunkSize: PREFILL_CHUNK_SIZE,
+        pipeline: 'Qwen3 1.7B Thinking-Gesamtsynthese → lokale Sicherheitsprüfung',
       };
+
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
-      cleanupLegacyModelCache(webllm, config);
+      void cleanupLegacyModelCaches(config);
       return engine;
     })().catch((error) => {
       enginePromise = null;
@@ -248,54 +244,104 @@ function normalizeOutput(text) {
   );
 }
 
-async function runCompletion(engine, system, prompt, { thinking = false, maxTokens = 650, seed = 17 } = {}) {
-  const response = await engine.chat.completions.create({
-    stream: false,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: prompt },
-    ],
-    temperature: thinking ? 0.6 : 0.7,
-    top_p: thinking ? 0.95 : 0.8,
-    repetition_penalty: 1.03,
-    presence_penalty: 0.15,
-    max_tokens: maxTokens,
-    seed,
-    extra_body: { enable_thinking: thinking },
-  });
-  return normalizeOutput(response?.choices?.[0]?.message?.content || '');
-}
-
 function sectionInstruction(formType) {
   const defs = SECTION_DEFS[formType] || SECTION_DEFS.A;
-  return defs.map(([key, label]) => `${key.toUpperCase()}: ${label}`).join('\n');
+  return defs.map(([key, label, maxWords]) => `${key.toUpperCase()}: ${label} (max. ${maxWords} Wörter)`).join('\n');
 }
 
-function buildReasoningPrompt({ formType, area, catalog }) {
+function buildPrompt({ formType, area, catalog }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
-  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\n\nOffizielle Unterpunkte:\n${sectionInstruction(formType)}\n\nOriginalaussagen:\n${catalog}\n\nAufgabe:\nAnalysiere die gesamte Situation semantisch und erstelle anschließend für jeden Unterpunkt einen fachlichen Text. Nutze EVIDENCE nur mit den IDs der Originalaussagen, die den jeweiligen Text tragen.\n\nStatusregeln:\n- supported: Unterpunkt ist aus den Originalaussagen fachlich belegbar.\n- missing: Es fehlt eine ausreichende Angabe; TEXT exakt "${MISSING_TEXT}".\n- context_only: Es gibt aktuelle passende Angaben, aber die vom Unterpunkt verlangte Zukunft/Planung ist nicht ausdrücklich genannt.\n- ambiguous: Quellen sind widersprüchlich oder nicht eindeutig genug.\n\nFür HEB A besonders wichtig:\n- a beschreibt aktuelle Situation plus Ressourcen.\n- b beschreibt den tatsächlich erkennbaren Unterstützungsbedarf, ohne formale Hilfebedarfsstufe.\n- c enthält nur ausdrücklich genannte Ziele/Wünsche.\n- d enthält ausdrücklich geplante Maßnahmen; wenn nur aktuelle Unterstützungen beschrieben sind, nutze context_only und benenne diese aktuell beschriebenen Unterstützungen ohne ihre Fortführung zu behaupten.\n\n${FORMAT_INSTRUCTION}`;
-}
-
-function serializeSections(parsed, formType) {
-  const keys = SECTION_KEYS[formType] || SECTION_KEYS.A;
-  return keys.map((key) => {
-    const section = parsed.sections[key];
-    return `<SECTION_${key.toUpperCase()}>\nSTATUS:${section.status}\nEVIDENCE:${section.evidence.join(',')}\nTEXT:${section.text}\n</SECTION_${key.toUpperCase()}>`;
-  }).join('\n\n');
-}
-
-function buildReviewPrompt({ formType, area, catalog, firstDraft }) {
-  return `HEB-Bereich: ${area}\n\nOriginalaussagen:\n${catalog}\n\nErster KI-Entwurf:\n${serializeSections(firstDraft, formType)}\n\nPrüfe jetzt jeden Unterpunkt gegen die gesamte Eingabe. Verbessere Sprache und fachliche Synthese, wenn nötig. Korrigiere jede falsche Negation, jede Bedeutungsverschiebung oder erfundene Aussage. EVIDENCE muss die tatsächlich verwendeten Quellen-IDs enthalten.\n\n${FORMAT_INSTRUCTION}`;
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\n\nUnterpunkte:\n${sectionInstruction(formType)}\n\nOriginalaussagen:\n${catalog}\n\nAufgabe:\nErstelle aus der gesamten Situation einen kurzen, professionellen HEB-Entwurf. Verknüpfe zusammengehörige Angaben fachlich, ohne neue Tatsachen zu erfinden. Nutze bei jedem nicht fehlenden Unterpunkt EVIDENCE nur mit den Original-IDs, die den Text tatsächlich tragen.\n\nBesonders wichtig:\n- Ressourcen und Unterstützungsbedarf zusammenhängend darstellen.\n- Ein verbaler Impuls zum Beginn ist Hilfebedarf bei der Initiierung, nicht bei der anschließenden Durchführung.\n- Ziele nur bei ausdrücklich genanntem Ziel/Wunsch.\n- HEB B/C: Entwicklung nur bei echtem zeitlichem Verlauf.\n- HEB A d): konkret beschriebene laufende Unterstützung darf als dieselbe Maßnahme benannt werden; nichts ergänzen.\n\n${FORMAT_INSTRUCTION}`;
 }
 
 function sectionMaxWords(formType, key) {
   const defs = SECTION_DEFS[formType] || SECTION_DEFS.A;
-  return defs.find(([candidate]) => candidate === key)?.[2] || 80;
+  return defs.find(([candidate]) => candidate === key)?.[2] || 70;
 }
 
 function makeFinalText(formType, parsed) {
   const defs = SECTION_DEFS[formType] || SECTION_DEFS.A;
   return defs.map(([key, label]) => `${label}\n${parsed.sections[key]?.text || MISSING_TEXT}`).join('\n\n').trim();
+}
+
+async function runSingleCompletion(engine, prompt, onProgress) {
+  let raw = '';
+  let visibleChars = 0;
+  let completionTokens = 0;
+  let timedOut = false;
+  const startedAt = Date.now();
+
+  setModelState({
+    status: 'generating',
+    percent: 0,
+    phase: 'analysis',
+    text: 'KI analysiert die Situation fachlich …',
+    generatedChars: 0,
+    completionTokens: 0,
+    error: null,
+  }, onProgress);
+
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    try { engine.interruptGenerate?.(); } catch { /* best effort */ }
+  }, GENERATION_TIMEOUT_MS);
+
+  try {
+    const stream = await engine.chat.completions.create({
+      stream: true,
+      stream_options: { include_usage: true },
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.55,
+      top_p: 0.9,
+      repetition_penalty: 1.05,
+      max_tokens: 800,
+      seed: 41,
+      extra_body: { enable_thinking: true },
+    });
+
+    for await (const chunk of stream) {
+      if (timedOut) break;
+      const delta = chunk?.choices?.[0]?.delta || {};
+      const piece = String(delta.content || '');
+      if (piece) {
+        raw += piece;
+        visibleChars += piece.length;
+      }
+      if (Number.isFinite(chunk?.usage?.completion_tokens)) {
+        completionTokens = chunk.usage.completion_tokens;
+      }
+
+      const thinkClosed = raw.includes('</think>');
+      const phase = thinkClosed ? 'writing' : 'analysis';
+      const text = thinkClosed
+        ? 'KI formuliert den HEB-Entwurf …'
+        : 'KI analysiert die Situation fachlich …';
+
+      setModelState({
+        status: 'generating',
+        percent: 0,
+        phase,
+        text,
+        generatedChars: visibleChars,
+        completionTokens,
+        elapsedMs: Date.now() - startedAt,
+        error: null,
+      }, onProgress);
+    }
+  } finally {
+    window.clearTimeout(timeout);
+  }
+
+  if (timedOut) {
+    const error = new Error('Die lokale KI hat die maximale Bearbeitungszeit von drei Minuten überschritten.');
+    error.code = 'GENERATION_TIMEOUT';
+    throw error;
+  }
+
+  return normalizeOutput(raw);
 }
 
 export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
@@ -312,82 +358,60 @@ export async function generateHebText({ notes, area, formType, mode = 'complete'
   const catalog = evidenceCatalog(units);
 
   try {
-    setModelState({ status: 'generating', percent: 100, text: 'KI analysiert die Situation fachlich …', error: null }, onProgress);
-    const firstText = await runCompletion(
+    const rawText = await runSingleCompletion(
       engine,
-      REASONING_SYSTEM,
-      buildReasoningPrompt({ formType, area, catalog }),
-      { thinking: true, maxTokens: 760, seed: 31 },
+      buildPrompt({ formType, area, catalog }),
+      onProgress,
     );
-    let firstDraft = parseReasonedSections(firstText, units, formType);
-    let firstHasStructure = keys.some((key) => firstDraft.sections[key]?.text);
 
-    // Falls der Thinking-Anteil das knappe mobile Tokenbudget vollständig
-    // verbraucht, gibt es genau einen zweiten echten LLM-Lauf ohne Thinking.
-    // Es wird weiterhin keinerlei regelbasierter HEB-Text erzeugt.
-    if (!firstHasStructure) {
-      setModelState({ status: 'generating', percent: 100, text: 'KI verdichtet die fachliche Analyse …', error: null }, onProgress);
-      const compactText = await runCompletion(
-        engine,
-        REASONING_SYSTEM,
-        buildReasoningPrompt({ formType, area, catalog }),
-        { thinking: false, maxTokens: 680, seed: 33 },
-      );
-      firstDraft = parseReasonedSections(compactText, units, formType);
-      firstHasStructure = keys.some((key) => firstDraft.sections[key]?.text);
+    const parsed = parseReasonedSections(rawText, units, formType);
+    const hasStructure = keys.every((key) => Boolean(parsed.sections[key]?.text));
+    if (!hasStructure) {
+      const error = new Error('Die lokale KI hat keinen vollständig strukturierten HEB-Entwurf erzeugt.');
+      error.code = 'QUALITY_REJECTED';
+      throw error;
     }
-    if (!firstHasStructure) throw new Error('Die lokale KI konnte keinen strukturierten HEB-Entwurf erzeugen.');
-
-    setModelState({ status: 'generating', percent: 100, text: 'KI prüft Inhalt und Fachlichkeit …', error: null }, onProgress);
-    const reviewedText = await runCompletion(
-      engine,
-      REVIEW_SYSTEM,
-      buildReviewPrompt({ formType, area, catalog, firstDraft }),
-      { thinking: false, maxTokens: 680, seed: 37 },
-    );
-    const reviewedCandidate = parseReasonedSections(reviewedText, units, formType);
-    const reviewedHasStructure = keys.some((key) => reviewedCandidate.sections[key]?.text);
-    const reviewed = reviewedHasStructure ? reviewedCandidate : firstDraft;
 
     let usefulSections = 0;
     for (const key of keys) {
-      const section = reviewed.sections[key];
-      const evidenceTexts = evidenceTextsForSection(reviewed, units, key);
+      const section = parsed.sections[key];
       const isMissing = section.status === 'missing' || section.text === MISSING_TEXT;
 
       if (isMissing) {
         section.status = 'missing';
         section.text = MISSING_TEXT;
+        section.evidence = [];
         continue;
       }
 
       if (!section.evidence.length) {
-        section.status = 'ambiguous';
-        section.text = UNSAFE_TEXT;
-        continue;
+        const error = new Error(`Unterpunkt ${key}) enthält keinen nachvollziehbaren Quellenbeleg.`);
+        error.code = 'QUALITY_REJECTED';
+        throw error;
       }
 
+      const evidenceTexts = evidenceTextsForSection(parsed, units, key);
       const check = validateReasonedSection(section.text, evidenceTexts, {
         maxWords: sectionMaxWords(formType, key),
         allowMissing: false,
       });
 
       if (!check.ok) {
-        section.status = 'ambiguous';
-        section.text = UNSAFE_TEXT;
-        continue;
+        const error = new Error(`Unterpunkt ${key}) hat die lokale Sicherheitsprüfung nicht bestanden: ${check.reasons.join(', ')}`);
+        error.code = 'QUALITY_REJECTED';
+        throw error;
       }
 
       usefulSections += 1;
     }
 
     if (!usefulSections) {
-      const error = new Error('Der erzeugte Text hat die Qualitätsprüfung nicht bestanden und wurde verworfen.');
+      const error = new Error('Der erzeugte Text enthält keinen sicher nutzbaren HEB-Unterpunkt.');
       error.code = 'QUALITY_REJECTED';
       throw error;
     }
 
-    const finalText = makeFinalText(formType, reviewed);
+    const finalText = makeFinalText(formType, parsed);
     setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
     return finalText;
   } catch (error) {

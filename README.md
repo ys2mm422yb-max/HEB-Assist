@@ -29,68 +29,70 @@ HEB-Assist orientiert sich an den offiziellen bayerischen HEB-Bögen für Mensch
 
 Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwendet. Die genaue Struktur steht in `HEB_REFERENCE.md`.
 
-## Technik – aktueller Teststand
+## Technik – v10
 
 - statische HTML/CSS/JavaScript-PWA ohne Backend
 - GitHub Pages als Test-Web-App
-- lokale Laufzeit: **WebLLM 0.2.82** über WebGPU
-- aktueller Modelltest: **Qwen 3 0.6B q4f16**
-- mobiles Kontextfenster: 2048 Tokens
-- Modell wird lokal im Browser gecacht; iOS kann Website-Speicher unter Umständen trotzdem entfernen
+- lokale Laufzeit: **WebLLM 0.2.82 / WebGPU**
+- lokales Modell: **Qwen 3 1.7B q4f16**
+- mobiles Kontextfenster: 2048 Tokens, Prefill-Chunk 128
+- die WebLLM-JavaScript-Laufzeit wird beim Deploy mit HEB-Assist gebündelt und von GitHub Pages ausgeliefert; es wird keine externe JavaScript-CDN für die KI-Laufzeit benötigt
+- das Modell wird beim ersten Start geladen und von WebLLM lokal im Browser gespeichert
+- nach erfolgreichem Erstdownload kann die Inferenz ohne externen KI-Inferenzserver lokal erfolgen; echter Offlinebetrieb hängt davon ab, dass Browser/PWA-Cache und Modellspeicher vom Betriebssystem nicht entfernt werden
 - Eingabe bleibt bis zum vollständigen Modellstart gesperrt
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 
-## v9: semantische Gesamtanalyse statt Quellen-Routing
+## v10: stärkeres Modell und nur ein intelligenter Gesamt-Lauf
 
-Der reale iPhone-Test von v8 hat gezeigt, dass die bisherige Architektur fachlich nicht ausreicht. Sie wählte Eingabesätze über lokale Regeln aus und ließ ein kleines Modell diese abschnittsweise umformulieren. Dadurch entstanden zwar quellennahe, aber zu mechanische Texte. Im realen Test wurde ein ausdrücklich vorhandener Hilfebedarf sogar zu „Keine Selbstversorgung ist notwendig“ verdreht und der Maßnahmenabschnitt enthielt Meta-Text statt eines fachlichen HEB-Inhalts.
+Die realen iPhone-Tests der kleineren Modelle waren fachlich nicht ausreichend. Qwen 3 0.6B konnte die gewünschte HEB-Synthese nicht zuverlässig auf dem erforderlichen Niveau leisten. Außerdem war die vorherige Analyse-plus-Reviewer-Pipeline langsam und vermittelte während der Generierung zu wenig Rückmeldung.
 
-v9 ersetzt diesen Ansatz vollständig:
+v10 ändert deshalb den Kern:
 
-1. Die Eingabe wird nur für nachvollziehbare Beleg-IDs in unveränderte Originalaussagen zerlegt.
-2. Das lokale Sprachmodell erhält **die gesamte Situation** zusammen mit HEB-Bogen, HEB-Bereich und allen offiziellen Unterpunkten.
-3. **Qwen 3 läuft für die erste Analyse im Thinking-Modus.** Das Modell soll semantisch unterscheiden, was aktuelle Situation, Ressource, Unterstützungsbedarf, Ziel, Maßnahme oder fehlende Information ist.
-4. Die KI muss für jeden sichtbaren Abschnitt die verwendeten Originalaussagen als Beleg-IDs angeben.
-5. Anschließend prüft ein zweiter lokaler KI-Lauf den Gesamtentwurf nochmals gegen die vollständige Eingabe und korrigiert fachliche Zuordnung, Widersprüche und Sprache.
-6. Lokale Sicherheitslogik prüft danach nur noch harte Grenzen und bekannte Fehler. Sie **schreibt keinen HEB-Text**.
-7. Belegte Unterstützung bei der Initiierung darf nicht zu Unterstützung bei der Durchführung werden; vorhandene Selbstständigkeit muss erhalten bleiben.
-8. Ziele, Entwicklungen, geplante Maßnahmen, Anbieter oder formale Hilfebedarfsstufen werden nur ausgegeben, wenn die Eingabe sie tatsächlich trägt.
-9. Aktuell beschriebene Unterstützung wird nicht stillschweigend zur zukünftigen Planung erklärt. Fehlt die Planung, muss die Ausgabe dies transparent kenntlich machen.
-10. Schlägt die fachliche Sicherheitsprüfung fehl, wird der betroffene Abschnitt verworfen statt durch einen regelbasierten Ersatztext ersetzt.
+1. **Qwen 3 1.7B** erhält die vollständige Situation, den HEB-Bogen, den gewählten offiziellen Bereich und alle zugehörigen Unterpunkte gemeinsam.
+2. Das Modell arbeitet in **einem einzigen Thinking-/Reasoning-Lauf**. Es soll Zusammenhänge fachlich erfassen und nicht bloß Sätze kopieren.
+3. Die Eingabe wird nur zur Nachvollziehbarkeit in Originalaussagen mit Beleg-IDs zerlegt. Diese Belege steuern nicht regelbasiert, was die KI denken oder formulieren darf.
+4. Jeder ausgegebene Unterpunkt muss die verwendeten Originalbelege nennen.
+5. Danach erfolgt **keine zweite KI-Überarbeitung**. Eine lokale Sicherheitsprüfung blockiert nur klar unzulässige Ergebnisse; sie schreibt selbst keinen HEB-Text.
+6. Die Generierung läuft als Stream. Die Oberfläche zeigt einen bewegten Aktivitätsbalken, Bearbeitungszeit und den aktuellen Schritt („analysiert“ / „formuliert“), damit ein laufender Prozess von einem Hänger unterscheidbar ist.
+7. Nach drei Minuten wird eine festhängende Generierung abgebrochen. Es wird kein Ersatztext erzeugt.
+8. HEB-Texte bleiben bewusst kurz, damit sie näher an die begrenzten Textfelder der offiziellen Bögen passen.
 
-„Thinking“ bedeutet hier einen zusätzlichen lokalen Reasoning-Schritt des Sprachmodells. Es ist keine Behauptung, dass das Modell wie ein Mensch denkt oder automatisch fachlich richtig ist. Die reale Qualität muss weiterhin mit synthetischen Fällen auf den Zielgeräten geprüft werden.
+### Fachliche Leitplanken
 
-## Warum Qwen 3 0.6B getestet wird
+- Ein verbaler Impuls zum Beginn einer Tätigkeit ist Hilfebedarf bei der **Initiierung**, nicht automatisch bei der Durchführung.
+- Vorhandene Selbstständigkeit bleibt als Ressource erhalten.
+- Ziele nur bei ausdrücklich genanntem Ziel oder Wunsch.
+- HEB B/C: Entwicklung nur bei tatsächlich beschriebenem zeitlichem Verlauf.
+- Eine formale Hilfebedarfsstufe wird nicht automatisch gewählt.
+- Für HEB A darf eine konkret beschriebene laufende Unterstützung als dieselbe Maßnahme benannt werden; zusätzliche oder intensivere Maßnahmen dürfen nicht ergänzt werden.
 
-Llama 3.2 1B lief auf dem getesteten iPhone stabiler als größere Modelle, war für die gewünschte freie fachliche HEB-Synthese aber nicht zuverlässig genug. Ein früherer Qwen-2.5-1.5B-Test war auf dem iPhone praktisch zu schwer. Qwen 3 0.6B wird deshalb als neuer Kompromiss getestet: kleiner als die bereits zu schwere 1.5B-Variante, aber mit eigenem Thinking-/Reasoning-Modus und stärkerer semantischer Aufgabenstellung.
+## Offline-Architektur
 
-Das ist ein Testentscheid, keine Qualitätsgarantie. Wenn Qwen 3 0.6B auf iOS zu viel Speicher benötigt oder fachlich nicht genügt, wird auch dieses Modell verworfen.
+Die JavaScript-KI-Laufzeit wird aus dem npm-Paket `@mlc-ai/web-llm` beim GitHub-Actions-Deploy lokal gebündelt (`vendor/webllm.js`) und mit der PWA gecacht. Dadurch braucht HEB-Assist nach einem vollständig erfolgreichen Erststart keine externe JavaScript-CDN für die KI-Laufzeit.
+
+Die Modellgewichte und die für das Modell benötigten WebGPU-Ressourcen werden beim ersten Modellstart durch WebLLM geladen und lokal im Browsercache gespeichert. Ob diese Daten dauerhaft erhalten bleiben, entscheidet der Browser bzw. iOS/Android; eine Garantie gegen Speicherbereinigung ist technisch nicht möglich.
 
 ## Automatische Tests
 
 Vor jedem GitHub-Pages-Deploy werden ausgeführt:
 
 - JavaScript-Syntaxprüfungen
+- Build der lokal gebündelten WebLLM-Laufzeit
 - synthetische Quellen-/Sicherheits-Regressionstests
-- synthetische Tests des neuen Reasoning-Ausgabeparsers
+- Reasoning-Ausgabeparser-/Sicherheitstests
 - Browser-Smoke-Tests in Chromium und WebKit
 - Android-ähnlicher Chromium-Viewport
 - iPhone-ähnlicher WebKit-Viewport
 - HEB A/B/C und die fünf offiziellen Hauptbereiche
 - Eingabesperre ohne gestartete echte KI
 - Dark Mode und mobile Viewport-Überläufe
-- Manifest und Service Worker
+- Manifest, Service Worker und lokal ausgelieferte WebLLM-Laufzeit
 
-Ein fehlgeschlagener relevanter Test verhindert den Deploy. Diese Tests können jedoch keine echte iPhone-WebGPU-Inferenz ersetzen.
+Ein fehlgeschlagener relevanter Test verhindert den Deploy. Diese Tests können keine echte iPhone-WebGPU-Inferenz und keine reale Modellqualität ersetzen.
 
 ## Externe Netzwerkzugriffe
 
-Beim Laden der App bzw. des lokalen Modells werden statische Ressourcen abgerufen:
-
-- GitHub Pages: App-Dateien
-- `esm.run`: WebLLM-Laufzeitbibliothek
-- die von WebLLM referenzierten Modellressourcen
-
-Die HEB-Eingabe wird nicht an einen externen KI-Inferenzdienst geschickt. Beim Abruf statischer Dateien können technisch übliche Verbindungsmetadaten wie IP-Adresse oder Browserinformationen beim jeweiligen Infrastrukturbetreiber anfallen.
+Beim ersten Laden werden statische App-Dateien von GitHub Pages und die von WebLLM referenzierten Modellressourcen geladen. Die HEB-Eingabe wird nicht an einen externen KI-Inferenzdienst geschickt. Beim Abruf statischer Dateien können technisch übliche Verbindungsmetadaten wie IP-Adresse oder Browserinformationen beim jeweiligen Infrastrukturbetreiber anfallen.
 
 ## Entwicklungsworkflow
 

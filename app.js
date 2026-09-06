@@ -72,9 +72,11 @@ const RESULT_SECTIONS = {
 const READY_PLACEHOLDER = notes.getAttribute('placeholder') || '';
 const LOADING_PLACEHOLDER = 'Eingabe wird freigeschaltet, sobald die lokale KI vollständig gestartet ist.';
 
-let serviceWorkerRegistration = null;
 let aiLoadInProgress = false;
 let lastCopyText = '';
+let generationStartedAt = 0;
+let generationTimer = null;
+let lastGenerationStatus = null;
 
 function updateFormHint() {
   formHint.textContent = INPUT_HINTS[reportType.value] || HEB_FORM_CONFIG.A.hint;
@@ -166,7 +168,95 @@ function renderHebResult(text) {
   }
 }
 
+function stopGenerationTimer() {
+  if (generationTimer) window.clearInterval(generationTimer);
+  generationTimer = null;
+  generationStartedAt = 0;
+  lastGenerationStatus = null;
+}
+
+function formatElapsed(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} min`;
+}
+
+function renderGenerationProgress() {
+  stopGenerationTimer();
+  generationStartedAt = Date.now();
+  result.className = 'result-generating';
+  result.replaceChildren();
+  lastCopyText = '';
+  copyButton.disabled = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'generation-status';
+
+  const icon = document.createElement('div');
+  icon.className = 'generation-status-icon';
+  icon.setAttribute('aria-hidden', 'true');
+
+  const title = document.createElement('strong');
+  title.className = 'generation-status-title';
+  title.textContent = 'KI erstellt den HEB-Entwurf';
+
+  const stage = document.createElement('span');
+  stage.id = 'generationStage';
+  stage.className = 'generation-status-stage';
+  stage.textContent = 'Situation wird fachlich analysiert …';
+
+  const track = document.createElement('div');
+  track.className = 'generation-activity-track';
+  track.setAttribute('role', 'progressbar');
+  track.setAttribute('aria-label', 'Lokale KI arbeitet');
+  const bar = document.createElement('div');
+  bar.className = 'generation-activity-bar';
+  track.append(bar);
+
+  const meta = document.createElement('span');
+  meta.id = 'generationMeta';
+  meta.className = 'generation-status-meta';
+  meta.textContent = 'Lokale Verarbeitung · 0 s';
+
+  const hint = document.createElement('span');
+  hint.className = 'generation-status-hint';
+  hint.textContent = 'Der bewegte Balken zeigt, dass die lokale KI weiterarbeitet. Die Fallbeschreibung bleibt auf diesem Gerät.';
+
+  wrap.append(icon, title, stage, track, meta, hint);
+  result.append(wrap);
+
+  generationTimer = window.setInterval(() => {
+    const metaEl = document.querySelector('#generationMeta');
+    if (!metaEl || !generationStartedAt) return;
+    const elapsed = Date.now() - generationStartedAt;
+    const activity = lastGenerationStatus?.completionTokens
+      ? ` · ${lastGenerationStatus.completionTokens} Tokens`
+      : lastGenerationStatus?.generatedChars
+        ? ` · Ausgabe aktiv`
+        : '';
+    metaEl.textContent = `Lokale Verarbeitung · ${formatElapsed(elapsed)}${activity}`;
+  }, 1000);
+}
+
+function updateGenerationProgress(status = {}) {
+  if (status.status !== 'generating') return;
+  lastGenerationStatus = status;
+  const stage = document.querySelector('#generationStage');
+  const meta = document.querySelector('#generationMeta');
+  if (stage) stage.textContent = status.text || 'KI arbeitet …';
+  if (meta && generationStartedAt) {
+    const elapsed = Date.now() - generationStartedAt;
+    const activity = status.completionTokens
+      ? ` · ${status.completionTokens} Tokens`
+      : status.generatedChars
+        ? ' · Ausgabe aktiv'
+        : '';
+    meta.textContent = `Lokale Verarbeitung · ${formatElapsed(elapsed)}${activity}`;
+  }
+}
+
 function setResult(text, state = 'ready') {
+  stopGenerationTimer();
   result.className = state === 'ready' ? 'result-ready' : state === 'error' ? 'result-error' : 'result-empty';
 
   if (state === 'ready') {
@@ -262,6 +352,7 @@ function updateEngineStatus(status = {}) {
   const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, status.percent)) : 0;
   engineProgressBar.style.width = `${Math.max(3, percent)}%`;
   updateStartupStatus(status, percent);
+  updateGenerationProgress(status);
 
   engineBadge.classList.remove('loading', 'ready', 'warning');
 
@@ -291,10 +382,10 @@ function updateEngineStatus(status = {}) {
 
   if (status.status === 'generating') {
     setAiInputEnabled(false);
-    engineBadge.textContent = 'KI formuliert …';
+    engineBadge.textContent = status.phase === 'writing' ? 'KI formuliert …' : 'KI analysiert …';
     engineBadge.classList.add('loading');
     engineProgressTrack.hidden = true;
-    engineStatusText.textContent = 'Die lokale KI erstellt den HEB-Entwurf.';
+    engineStatusText.textContent = status.text || 'Die lokale KI erstellt den HEB-Entwurf.';
     return;
   }
 
@@ -321,7 +412,7 @@ async function startLocalAi() {
   try {
     await preloadLocalAi(updateEngineStatus);
   } catch (error) {
-    console.warn('Local AI start failed:', error?.message || error);
+    console.warn('Lokale KI konnte nicht gestartet werden:', error?.message || error);
   } finally {
     aiLoadInProgress = false;
   }
@@ -344,8 +435,7 @@ function validateInput() {
 
   const findings = detectSensitiveData(value);
   if (findings.length) {
-    const message = privacyMessage(findings);
-    privacyResult.textContent = message;
+    privacyResult.textContent = privacyMessage(findings);
     privacyResult.hidden = false;
     setResult('Die Eingabe wurde aus Datenschutzgründen nicht verarbeitet.', 'error');
     privacyResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -355,43 +445,6 @@ function validateInput() {
   return value;
 }
 
-async function checkForAppUpdate() {
-  if (!serviceWorkerRegistration || !navigator.onLine) return;
-  try {
-    await serviceWorkerRegistration.update();
-    if (serviceWorkerRegistration.waiting) {
-      serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-  } catch (error) {
-    console.warn('Automatic app update check failed:', error?.message || error);
-  }
-}
-
-async function setupAutomaticAppUpdates() {
-  if (!('serviceWorker' in navigator)) return;
-
-  try {
-    serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', {
-      updateViaCache: 'none',
-    });
-
-    serviceWorkerRegistration.addEventListener('updatefound', () => {
-      const installingWorker = serviceWorkerRegistration.installing;
-      if (!installingWorker) return;
-
-      installingWorker.addEventListener('statechange', () => {
-        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          installingWorker.postMessage({ type: 'SKIP_WAITING' });
-        }
-      });
-    });
-
-    await checkForAppUpdate();
-  } catch (error) {
-    console.warn('Service Worker registration failed:', error?.message || error);
-  }
-}
-
 reportType.addEventListener('change', () => {
   updateFormHint();
   setResult('Noch keine Formulierung erstellt.', 'empty');
@@ -399,12 +452,9 @@ reportType.addEventListener('change', () => {
 
 notes.addEventListener('input', () => {
   charCount.textContent = `${notes.value.length} / 3500`;
-  if (!privacyResult.hidden) {
-    const findings = detectSensitiveData(notes.value);
-    if (!findings.length) {
-      privacyResult.hidden = true;
-      privacyResult.textContent = '';
-    }
+  if (!privacyResult.hidden && !detectSensitiveData(notes.value).length) {
+    privacyResult.hidden = true;
+    privacyResult.textContent = '';
   }
 });
 
@@ -420,9 +470,9 @@ generateButton.addEventListener('click', async () => {
   const value = validateInput();
   if (!value) return;
 
-  generateButton.disabled = true;
+  setAiInputEnabled(false);
   copyButton.disabled = true;
-  setResult('KI formuliert den HEB-Entwurf …', 'empty');
+  renderGenerationProgress();
 
   try {
     const aiDraft = await generateHebText({
@@ -435,15 +485,19 @@ generateButton.addEventListener('click', async () => {
     setResult(aiDraft, 'ready');
     updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
   } catch (error) {
-    console.warn('Local AI generation failed:', error?.message || error);
+    console.warn('Lokale KI-Generierung fehlgeschlagen:', error?.message || error);
+    stopGenerationTimer();
 
     if (isLocalAiReady()) {
       updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
-      const qualityRejected = error?.code === 'QUALITY_REJECTED' || /qualitätsprüfung|verworfen/i.test(error?.message || '');
+      const qualityRejected = error?.code === 'QUALITY_REJECTED';
+      const timedOut = error?.code === 'GENERATION_TIMEOUT';
       setResult(
-        qualityRejected
-          ? 'Der erzeugte Text hat die Qualitätsprüfung nicht bestanden und wurde verworfen. Die lokale KI ist weiterhin einsatzbereit. Bitte den Entwurf erneut erstellen.'
-          : 'Beim Formulieren ist ein Fehler aufgetreten. Die lokale KI ist weiterhin einsatzbereit. Bitte den Entwurf erneut erstellen.',
+        timedOut
+          ? 'Die lokale KI hat die maximale Bearbeitungszeit überschritten. Es wurde kein Ersatztext erzeugt.'
+          : qualityRejected
+            ? 'Der erzeugte Text hat die Qualitätsprüfung nicht bestanden und wurde verworfen. Es wurde kein Ersatztext erzeugt.'
+            : 'Beim Formulieren ist ein technischer Fehler aufgetreten. Die lokale KI bleibt geladen; es wurde kein Ersatztext erzeugt.',
         'error',
       );
     } else {
@@ -456,7 +510,7 @@ generateButton.addEventListener('click', async () => {
       setResult('Die lokale KI konnte während der Verarbeitung nicht weiterarbeiten. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet.', 'error');
     }
   } finally {
-    generateButton.disabled = !isLocalAiReady();
+    setAiInputEnabled(isLocalAiReady());
   }
 });
 
@@ -477,24 +531,12 @@ engineBadge.addEventListener('click', () => detailsDialog.showModal());
 closeDialog.addEventListener('click', () => detailsDialog.close());
 retryAiButton.addEventListener('click', () => {
   detailsDialog.close();
-  startLocalAi();
+  void startLocalAi();
 });
-startupRetryButton.addEventListener('click', startLocalAi);
+startupRetryButton.addEventListener('click', () => void startLocalAi());
 detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
-
-window.addEventListener('focus', () => {
-  checkForAppUpdate();
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) checkForAppUpdate();
-});
-
-window.setInterval(() => {
-  if (!document.hidden) checkForAppUpdate();
-}, 5 * 60 * 1000);
 
 updateFormHint();
 setAiInputEnabled(false);
@@ -508,7 +550,5 @@ if (!capability.supported) {
     error: 'Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.',
   });
 } else {
-  window.setTimeout(startLocalAi, 500);
+  window.setTimeout(() => void startLocalAi(), 250);
 }
-
-window.addEventListener('load', setupAutomaticAppUpdates);

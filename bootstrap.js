@@ -1,4 +1,4 @@
-const BUILD_ID = '2026-09-06-0042';
+const BUILD_ID = '2026-09-06-1030';
 
 let serviceWorkerRegistration = null;
 let aiModule = null;
@@ -117,14 +117,9 @@ function waitForInitialPageLoad() {
 }
 
 async function startApp() {
-  // iOS showed a reproducible first-launch stall when model start depended on a
-  // timer inside app.js. Start the real local model immediately from bootstrap
-  // instead. The app module attaches to the same in-flight engine promise.
+  // Der echte lokale Modellstart beginnt sofort. App- und Update-Logik dürfen
+  // den ersten Download bzw. die Initialisierung auf iOS nicht ausbremsen.
   const aiPromise = startLocalAiImmediately();
-
-  // Import app.js only after the initial page load. This prevents its legacy
-  // load-handler from starting a service-worker update while the model is
-  // beginning its first download/initialisation.
   await waitForInitialPageLoad();
 
   try {
@@ -138,7 +133,7 @@ async function startApp() {
     await aiPromise;
     finishReadyUiIfNeeded();
   } catch {
-    // The visible loading gate already contains the local-AI error.
+    // Der sichtbare Ladebildschirm enthält bereits den lokalen KI-Fehler.
   }
 }
 
@@ -157,8 +152,6 @@ async function checkForAppUpdate() {
 async function prepareServiceWorkerAfterAiStart() {
   if (!('serviceWorker' in navigator)) return;
 
-  // Never let service-worker installation compete with the first model start.
-  // Updates are prepared only after the AI has either become ready or failed.
   try {
     await aiStartupPromise?.catch(() => undefined);
     serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', {

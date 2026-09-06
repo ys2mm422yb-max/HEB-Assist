@@ -9,9 +9,10 @@
   <meta name="description" content="Lokaler HEB-Formulierungsassistent mit Datenschutzprüfung." />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./styles.css?build=20260906-0835" />
-  <link rel="stylesheet" href="./dark-mode.css?build=20260906-0835" />
-  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-0835" />
+  <link rel="stylesheet" href="./styles.css?build=20260906-1030" />
+  <link rel="stylesheet" href="./dark-mode.css?build=20260906-1030" />
+  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-1030" />
+  <link rel="stylesheet" href="./generation-progress.css?build=20260906-1030" />
   <title>HEB Assist</title>
 </head>
 <body class="startup-locked">
@@ -29,7 +30,7 @@
         <span id="startupStage">Vorbereitung läuft …</span>
       </div>
 
-      <p class="startup-note">Beim ersten Start wird das Sprachmodell einmalig geladen und lokal im Browser gespeichert. Bei späteren Starts wird es aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
+      <p class="startup-note">Beim ersten Start wird Qwen 3 1.7B einmalig geladen und lokal im Browser gespeichert. Bei späteren Starts werden Laufzeit und Modell aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
 
       <div id="startupError" class="startup-error" hidden>
         <strong>Die lokale KI konnte nicht gestartet werden.</strong>
@@ -122,7 +123,8 @@
     <div class="dialog-body">
       <h2>Technik & Datenschutz</h2>
       <p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist.</p>
-      <p>Das Sprachmodell wird beim ersten Start lokal im Browser gespeichert. Bei späteren Starts wird es aus dem Gerätespeicher geladen, sofern iOS den Website-Speicher nicht zwischenzeitlich entfernt hat.</p>
+      <p>Die WebLLM-Laufzeit wird mit HEB Assist selbst ausgeliefert. Das Sprachmodell Qwen 3 1.7B wird beim ersten Start geladen und lokal im Browser gespeichert.</p>
+      <p>Nach erfolgreichem Erstdownload kann die KI ohne externen Inferenzserver lokal arbeiten. Offline-Betrieb ist möglich, solange Browser/PWA-Cache und Modellspeicher auf dem Gerät erhalten bleiben. iOS kann Website-Speicher unter Umständen entfernen.</p>
       <p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p>
       <p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p>
 
@@ -139,6 +141,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="./bootstrap.js?build=20260906-0835"></script>
+  <script type="module" src="./bootstrap.js?build=20260906-1030"></script>
 </body>
 </html>

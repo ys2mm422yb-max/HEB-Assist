@@ -18,70 +18,70 @@ HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen Freig
 - automatische PWA-Aktualisierung.
 - Browser-Smoke-Tests für Chromium, WebKit sowie iPhone-/Android-ähnliche Viewports sind im GitHub-Workflow integriert.
 
-## Bisherige Modelltests auf iPhone/Safari
+## Bisherige reale iPhone-Modelltests
 
 - größere lokale Modellvarianten führten teilweise zu Webseitenprozess-/Speicherproblemen.
-- ein früherer **Qwen-2.5-1.5B-WebLLM**-Versuch war für die praktische iOS-Speichergrenze zu schwer.
+- ein früherer **Qwen-2.5-1.5B-WebLLM**-Versuch war für den damaligen iOS-Test praktisch zu schwer.
 - sehr kleine Modelle liefen stabiler, lieferten aber fachlich unbrauchbare Texte.
-- **Llama 3.2 1B Instruct** lief stabiler, war bei freier fachlicher HEB-Generierung aber nicht zuverlässig genug.
+- **Llama 3.2 1B Instruct** startete vergleichsweise stabil, erzeugte jedoch mehrfach grammatikalisch und fachlich unbrauchbare HEB-Ausgaben.
+- **Qwen 3 0.6B** mit Gesamtanalyse war ebenfalls nicht ausreichend. Die gewünschte fachliche Synthese war nicht zuverlässig, und die Kombination aus Thinking-Lauf plus zweitem KI-Prüflauf war auf dem realen iPhone zu langsam bzw. blieb für den Nutzer ohne brauchbare Fortschrittsanzeige lange im Zustand „KI formuliert …“.
 
-## Reale iPhone-Bewertung von v8: nicht ausreichend
+Bewertung: **Qwen 3 0.6B wird für die eigentliche HEB-Generierung nicht weiterverwendet.**
 
-Der vollständig synthetische HEB-A-Testfall „Selbstversorgung / Wohnen“ wurde auf dem realen iPhone geprüft.
+## Neuer Entwicklungsstand: v10
 
-Ergebnis:
+v10 wechselt auf **Qwen 3 1.7B q4f16 über WebLLM 0.2.82**.
 
-- a) gab im Wesentlichen eine verkürzte Wiedergabe der Eingabe aus. Die Formulierung war quellengetreu, aber zu wenig fachlich synthetisiert.
-- b) erzeugte **„Keine Selbstversorgung ist notwendig.“** Obwohl in der Eingabe ein verbaler Impuls zur Initiierung der Körperpflege und Unterstützung beim finanziellen Überblick ausdrücklich beschrieben waren. Das ist fachlich falsch.
-- c) meldete korrekt fehlende Angaben, weil kein Rahmenziel genannt war.
-- d) erzeugte **„Keine neuen Maßnahmen, keine neuen Ziele, keine neuen Hilfebedarfsstufen.“** Das ist kein brauchbarer HEB-Maßnahmenabschnitt und enthält Meta-Text.
+### Architektur
 
-Bewertung: **v8 ist konzeptionell zu mechanisch und fachlich nicht ausreichend. Die Quellen-Routing-Architektur wird nicht weiterverwendet.**
-
-## Neuer Entwicklungsstand: v9
-
-v9 wechselt auf **Qwen 3 0.6B q4f16 über WebLLM 0.2.82** mit 2048 Tokens Kontext und ersetzt das bisherige regelbasierte Quellen-Routing.
-
-### Geplanter/implementierter Ablauf
-
-1. Originaleingabe wird lokal lediglich in unveränderte Aussagen mit Beleg-IDs zerlegt.
-2. Qwen 3 erhält die **gesamte Eingabe** sowie den ausgewählten HEB-Bogen, HEB-Bereich und alle offiziellen Unterpunkte.
-3. Der erste Modelllauf verwendet **Thinking-Modus** für eine semantische Gesamtanalyse.
-4. Die KI ordnet selbst fachlich zu, welche Tatsachen welche HEB-Unterpunkte tragen, und nennt dafür Beleg-IDs.
-5. Ein zweiter lokaler KI-Lauf prüft und überarbeitet den Gesamtentwurf gegen die vollständige Eingabe.
-6. Lokale Regeln erzeugen keine HEB-Prosa. Sie blockieren nur strukturell oder fachlich eindeutig unzulässige Ergebnisse.
-7. Bekannte reale Fehler aus v8 werden ausdrücklich geblockt, darunter die Negation vorhandenen Unterstützungsbedarfs und metaartige Negativlisten.
-8. Fehlen Ziele, Entwicklungen, zukünftige Maßnahmen, Anbieter oder eine formale Hilfebedarfsstufe, wird nichts erfunden.
+1. Die vollständige Eingabe wird zusammen mit HEB-Bogen, HEB-Bereich und allen offiziellen Unterpunkten in einem Modelllauf verarbeitet.
+2. Qwen 3 1.7B nutzt Thinking/Reasoning für die fachliche Gesamtanalyse.
+3. Die lokale KI soll Beziehungen zwischen Ressource, Unterstützungsbedarf und beschriebenen Unterstützungshandlungen selbst semantisch erkennen.
+4. Die Eingabe wird lediglich für nachvollziehbare Beleg-IDs in Originalaussagen zerlegt; es gibt kein regelbasiertes Quellen-Routing mehr.
+5. Jeder nicht fehlende Unterpunkt muss verwendete Originalbelege nennen.
+6. Es gibt **keinen zweiten KI-Reviewer**. Nach dem Modelllauf prüft nur lokale Sicherheitslogik auf klar erkennbare unzulässige Inhalte oder Bedeutungsverschiebungen. Diese Logik erzeugt selbst keinen HEB-Text.
+7. Die Generierung streamt lokal. Die Oberfläche zeigt einen bewegten Aktivitätsbalken, Bearbeitungszeit und die aktuelle Phase, damit laufende Berechnung und Hänger unterscheidbar sind.
+8. Eine Generierung wird nach maximal drei Minuten abgebrochen, wenn sie nicht fertig wird. Es wird kein Ersatztext erzeugt.
+9. Die WebLLM-JavaScript-Laufzeit wird beim Deploy lokal gebündelt und von der PWA gecacht; `esm.run` oder eine andere JavaScript-CDN ist für die Laufzeit nicht mehr vorgesehen.
+10. Das neue Modell wird beim ersten Start separat geladen und von WebLLM lokal im Browser gespeichert.
 
 ### Erwartung für den bekannten synthetischen HEB-A-Testfall
 
-- a) soll die Situation **fachlich zusammenführen**, nicht nur die Eingabe Satz für Satz wiederholen; Selbstständigkeit bei Körperpflege und Produktauswahl muss als Ressource erhalten bleiben.
-- b) muss Unterstützungsbedarf bei der **Initiierung** der Körperpflege und beim finanziellen Überblick erkennen. Hilfe bei der Durchführung der Körperpflege darf nicht erfunden werden.
-- c) muss ohne ausdrücklich genanntes Ziel fehlende Angaben anzeigen.
-- d) darf aktuelle Unterstützungen nicht automatisch als zukünftige Maßnahmen ausgeben. Wenn keine Fortführung/Planung genannt ist, muss das transparent erkennbar sein.
-- keine Diagnose, Ursache, Bewertung, Entwicklung oder Hilfebedarfsstufe ergänzen.
+Beim Testfall mit verbalem Impuls zur Aufnahme der Körperpflege muss v10 mindestens Folgendes leisten:
 
-## Automatisierte Tests
+- a) Situation fachlich zusammenführen und die überwiegend selbstständige Durchführung als Ressource erhalten.
+- b) Unterstützungsbedarf bei der **Initiierung** erkennen, ohne Hilfe bei der Durchführung zu erfinden.
+- c) ohne ausdrücklich genanntes Ziel transparent fehlende Angaben ausgeben.
+- d) die tatsächlich beschriebene Unterstützungshandlung fachlich benennen, ohne zusätzliche Maßnahmen zu erfinden.
+- keine Diagnose, Ursache, Bewertung, Entwicklung oder formale Hilfebedarfsstufe ergänzen.
+- keine Fantasiewörter, Wortwiederholungsschleifen oder kaputten Bindestrichketten.
 
-Der GitHub-Pages-Workflow prüft vor dem Deploy:
+## Automatisierte Tests für v10
 
+Der GitHub-Pages-Workflow soll vor dem Deploy prüfen:
+
+- npm-Abhängigkeiten und Build der lokal gebündelten WebLLM-Laufzeit
 - JavaScript-Syntax
-- bestehende synthetische Quellen-Sicherheitsregressionen
-- neue synthetische Reasoning-Parser-/Sicherheitsregressionen
-- bekannte v8-Fehler „Keine Selbstversorgung ist notwendig“ und Meta-Negativlisten
+- bestehende synthetische Quellen-/Sicherheitsregressionen
+- Reasoning-Parser-/Sicherheitsregressionen
 - Browser-Smoke-Tests mit Chromium und WebKit
 - iPhone-/Android-ähnliche Layouts
 - HEB A/B/C und offizielle Hauptbereiche
 - Sperre ohne gestartete echte KI
 - Dark Mode
 - Manifest und Service Worker
+- lokale Erreichbarkeit von `vendor/webllm.js`
+- keine externe JavaScript-CDN für die KI-Laufzeit im App-Shell-Test
 
-## Für v9 noch offen
+## Für v10 noch offen
 
-- GitHub-Actions-Lauf der v9-Änderung muss vollständig grün sein.
-- GitHub Pages muss den v9-Stand erfolgreich veröffentlichen.
-- Qwen 3 0.6B muss auf dem realen iPhone vollständig laden und ohne Safari-/Speicherabbruch starten.
-- der bekannte synthetische HEB-A-Fall muss auf dem realen iPhone fachlich besser ausfallen als v8.
+- GitHub-Actions-Lauf der v10-Änderung muss vollständig grün sein.
+- GitHub Pages muss den v10-Stand erfolgreich veröffentlichen.
+- Qwen 3 1.7B muss auf dem realen iPhone vollständig laden und ohne Safari-/Speicherabbruch starten.
+- nach dem Erstdownload muss geprüft werden, ob ein erneuter Start aus dem lokalen Browsercache ohne erneuten vollständigen Modelldownload funktioniert.
+- Offline-Test nach erfolgreichem Erstdownload steht aus.
+- der bekannte synthetische HEB-A-Fall muss auf dem realen iPhone fachlich bewertet werden.
+- Generierungsdauer und Verhalten des neuen Aktivitätsbalkens müssen auf dem realen iPhone geprüft werden.
 - mehrere aufeinanderfolgende Generierungen auf realem iPhone müssen geprüft werden.
 - HEB B muss mit einem synthetischen Verlaufsfall geprüft werden.
 - HEB C muss mit einem synthetischen Abschlussfall geprüft werden.

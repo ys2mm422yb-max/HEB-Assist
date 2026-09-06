@@ -1,13 +1,15 @@
-const CACHE_NAME = 'heb-assist-shell-v33';
+const CACHE_NAME = 'heb-assist-shell-v34';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './dark-mode.css',
   './mobile-fixes.css',
+  './generation-progress.css',
   './bootstrap.js',
   './app.js',
   './ai-engine.js',
+  './vendor/webllm.js',
   './evidence-pipeline.js',
   './reasoning-pipeline.js',
   './privacy-filter.js',
@@ -29,7 +31,7 @@ self.addEventListener('activate', (event) => {
       try {
         await self.registration.navigationPreload.enable();
       } catch {
-        // Navigation preload is optional.
+        // Navigation preload ist optional.
       }
     }
     await self.clients.claim();

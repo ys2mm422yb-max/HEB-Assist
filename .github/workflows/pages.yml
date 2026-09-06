@@ -9,9 +9,11 @@ on:
       - 'styles.css'
       - 'dark-mode.css'
       - 'mobile-fixes.css'
+      - 'generation-progress.css'
       - 'bootstrap.js'
       - 'app.js'
       - 'ai-engine.js'
+      - 'runtime-entry.js'
       - 'evidence-pipeline.js'
       - 'reasoning-pipeline.js'
       - 'privacy-filter.js'
@@ -47,13 +49,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build local WebLLM runtime
+        run: npm run build:runtime
 
       - name: Check JavaScript syntax
         run: |
           node --check bootstrap.js
           node --check app.js
           node --check ai-engine.js
+          node --check runtime-entry.js
           node --check evidence-pipeline.js
           node --check reasoning-pipeline.js
           node --check privacy-filter.js
@@ -69,16 +78,23 @@ jobs:
       - name: Run synthetic reasoning-safety regression tests
         run: node tests/reasoning-pipeline.test.mjs
 
-      - name: Install browser test tooling
-        run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium webkit
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run Chromium, WebKit and mobile-layout smoke tests
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/heb-assist-http.log 2>&1 &
           sleep 2
           npm run test:browser
+
+      - name: Prepare static Pages artifact
+        run: |
+          rm -rf _site
+          mkdir -p _site/vendor
+          cp index.html styles.css dark-mode.css mobile-fixes.css generation-progress.css _site/
+          cp bootstrap.js app.js ai-engine.js evidence-pipeline.js reasoning-pipeline.js privacy-filter.js heb-knowledge.js _site/
+          cp manifest.webmanifest icon.svg sw.js _site/
+          cp vendor/webllm.js _site/vendor/webllm.js
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -88,7 +104,7 @@ jobs:
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
