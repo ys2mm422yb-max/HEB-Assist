@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
+const V14_GUARD_MIGRATION_KEY = 'heb-assist-v14-start-guard-migrated';
 
 async function openWithoutExternalNetwork(page) {
   await page.route(/^https:\/\//, (route) => route.abort());
@@ -52,11 +53,12 @@ test('lokale Transformers.js-Runtime enthält Qwen-3.5-Textsupport und lädt ohn
   expect(result.error).not.toMatch(/does not resolve to a valid URL|Failed to resolve module specifier|onnxruntime-(?:web|common|node)/i);
 });
 
-test('Crash-Loop-Schutz verhindert einen automatischen zweiten Großdownload', async ({ page }) => {
-  await page.addInitScript(({ key, profile }) => {
+test('Crash-Loop-Schutz verhindert nach der v14-Migration einen automatischen zweiten Großdownload', async ({ page }) => {
+  await page.addInitScript(({ guardKey, migrationKey, profile }) => {
     try { Object.defineProperty(navigator, 'gpu', { value: {}, configurable: true }); } catch {}
-    localStorage.setItem(key, JSON.stringify({ profile, startedAt: Date.now() }));
-  }, { key: START_GUARD_KEY, profile: MODEL_PROFILE });
+    localStorage.setItem(migrationKey, '1');
+    localStorage.setItem(guardKey, JSON.stringify({ profile, startedAt: Date.now() }));
+  }, { guardKey: START_GUARD_KEY, migrationKey: V14_GUARD_MIGRATION_KEY, profile: MODEL_PROFILE });
   await page.route(/^https:\/\//, (route) => route.abort());
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#startupTitle')).toHaveText('Automatischer KI-Neustart gestoppt');
