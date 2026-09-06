@@ -6,9 +6,9 @@ Stand: 2026-09-06
 
 HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen und datenschutzrechtlichen Freigabe dürfen ausschließlich vollständig synthetische Testfälle verwendet werden.
 
-## Aktueller technischer Stand – v13
+## Aktueller technischer Stand – v14
 
-Der aktuell veröffentlichte Entwicklungsstand verwendet **Qwen 3.5 0.8B Text** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**.
+Der aktuell veröffentlichte Entwicklungsstand verwendet **Qwen 3.5 0.8B Text** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**. Die lokal gebündelte Transformers.js-4.2.0-Runtime enthält zusätzlich den bestätigten Upstream-Fix aus `huggingface/transformers.js#1664` gegen mehrfache Modelldatei-Anforderungen bei aktivem `progress_callback`.
 
 - Modell: `onnx-community/Qwen3.5-0.8B-Text-ONNX`
 - Revision: `1e45daba048899e7f771657ada617ec49350aa91`
@@ -16,6 +16,7 @@ Der aktuell veröffentlichte Entwicklungsstand verwendet **Qwen 3.5 0.8B Text** 
 - Datentyp: `q4f16`, wenn WebGPU `shader-f16` unterstützt; sonst `q4`
 - Inferenz: lokal im Browser über WebGPU
 - Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim GitHub-Pages-Deploy lokal mit HEB-Assist gebündelt
+- der Build wendet den Upstream-Fix aus PR #1664 auf die 4.2.0-Browser-Runtime an und bricht ab, wenn die erwartete Stelle nicht eindeutig gefunden oder der Fix nicht verifiziert werden kann
 - Modellressourcen werden beim ersten Start von Hugging Face geladen und anschließend soweit vom Browser unterstützt lokal gecacht
 - HEB-Eingaben bleiben gesperrt, bis das echte lokale Sprachmodell vollständig gestartet und einsatzbereit ist
 - kein regel-/regexbasierter Ersatz-HEB und kein externer KI-Inferenzserver für Falltexte
@@ -56,49 +57,69 @@ Bewertung: **v12 wird in dieser Form nicht weitergetestet.** Der beobachtete 94-
 
 ### Qwen 3.5 0.8B Text – v13
 
-v13 stellt auf den dedizierten Text-only-ONNX-Export um. Die sichtbare Ladeanzeige verwendet `progress_total` für den Gesamtfortschritt und zeigt, soweit verfügbar, die geladenen und gesamten Datenmengen. Erst nach vollständigem Dateidownload wird der Zustand als Modellinitialisierung bezeichnet.
+v13 stellte auf den dedizierten Text-only-ONNX-Export um. Die sichtbare Ladeanzeige verwendete `progress_total` für den Gesamtfortschritt und zeigte zusätzlich die tatsächlich gemeldeten Dateimengen.
 
-Der entscheidende reale iPhone-Test von v13 steht noch aus. Qwen 3.5 0.8B Text gilt daher derzeit **weder als iPhone-stabil noch als fachlich geeignet bestätigt**.
+Beim realen Ziel-iPhone lief `model_q4f16.onnx_data` zunächst bis **423 von 448 MB** und später bis **438 von 448 MB / 98 %**. Danach war im beobachteten Zeitraum kein weiterer sichtbarer Fortschritt erkennbar. Damit war bestätigt, dass v13 tatsächlich die richtige Textdatei lud und die frühere 94-%-Anzeige nicht mehr das Hauptproblem war. Der Versuch erreichte trotzdem nicht `KI ist bereit ✓`.
 
-## v13 – GitHub/Deployment
+Bei der anschließenden Prüfung wurde ein bestätigter Fehler in exakt der verwendeten Abhängigkeit Transformers.js 4.2.0 gefunden: Bei aktivem `progress_callback` können Modelldateien mehrfach angefordert werden (`huggingface/transformers.js` Issue #1663). Upstream wurde dies mit PR #1664 und Merge-Commit `f7487c737aa8cafbc106c9adf69dc9578c8f3fe0` korrigiert.
+
+Bewertung: **Der reale v13-Stillstand beweist allein nicht, dass dieser Runtime-Fehler seine einzige Ursache war.** Der bekannte Fehler betrifft jedoch exakt unseren Runtime-/Callback-Pfad und musste deshalb vor einem weiteren belastbaren iPhone-Test entfernt werden.
+
+### Qwen 3.5 0.8B Text – v14
+
+v14 behält Modell, Revision, Text-only-Architektur und adaptive Quantisierung aus v13 unverändert bei. Geändert wurde der lokal gebündelte Transformers.js-4.2.0-Build: Er übernimmt exakt die upstream korrigierte Normalisierung des Memoize-Schlüssels aus PR #1664. Der Build prüft hart, dass die alte fehlerhafte Stelle genau einmal gefunden, ersetzt und anschließend nicht mehr vorhanden ist.
+
+Zusätzlich entfernt v14 beim ersten Öffnen einmalig einen zurückgebliebenen v13-Startmarker. Danach bleibt der Crash-Loop-Schutz aktiv; ein neuer unvollständiger Start blockiert weiterhin einen automatischen zweiten Großdownload.
+
+Der entscheidende reale iPhone-Test von v14 steht noch aus. Qwen 3.5 0.8B Text gilt daher weiterhin **weder als iPhone-stabil noch als fachlich geeignet bestätigt**.
+
+## v14 – GitHub/Deployment
 
 ### Technische Änderungen
 
-- dediziertes Textmodell `onnx-community/Qwen3.5-0.8B-Text-ONNX`
-- feste Revision `1e45daba048899e7f771657ada617ec49350aa91`
-- geräteabhängige Quantisierung: `q4f16` bei `shader-f16`, sonst `q4`
-- kein Laden von Vision-/Bildmodellteilen
-- korrekter Gesamtfortschritt über `progress_total`
-- sichtbare Dateigrößenangaben, wenn die Runtime `loaded`/`total` liefert
-- bestehender Crash-Loop-Schutz bleibt aktiv
-- bestehende Eingabesperre bis `KI ist bereit ✓` bleibt aktiv
-- Service-Worker-Cache auf v39 erhöht
+- unverändert dediziertes Textmodell `onnx-community/Qwen3.5-0.8B-Text-ONNX`
+- unverändert feste Revision `1e45daba048899e7f771657ada617ec49350aa91`
+- unverändert `q4f16` bei `shader-f16`, sonst `q4`
+- Transformers.js-4.2.0-Bundle mit bestätigtem Upstream-Fix aus Issue #1663 / PR #1664
+- Build bricht ab, wenn die erwartete Memoize-Stelle nicht eindeutig gepatcht werden kann
+- einmalige Migration eines zurückgebliebenen v13-Startmarkers
+- Crash-Loop-Schutz nach der Migration weiterhin aktiv und automatisiert geprüft
+- Service-Worker-Cache auf `heb-assist-shell-v40` erhöht
+- sichtbare App-Build-ID auf `2026-09-06-v14` erhöht
 
-### GitHub-Actions-Lauf #125
+### GitHub-Actions-Lauf #127
 
-Der erste v13-Lauf wurde **nicht deployed**, weil vier Browser-Smoke-Tests des Crash-Loop-Schutzes fehlschlugen. Ursache war ein veralteter Test-Fixwert für das v12-Modellprofil. Die App-Logik selbst verglich korrekt gegen das neue v13-Profil. Der Test wurde deshalb aktualisiert; der Schutz wurde nicht abgeschwächt.
+Der erste v14-Lauf wurde **nicht deployed**. Der bewusst strenge Runtime-Build fand die erwartete Upstream-Stelle im kompilierten npm-Bundle wegen einer leicht anderen Bundle-Form nicht und brach ab. Dadurch wurde kein unbestätigter Patch veröffentlicht.
 
-Ergebnis dieses Laufes: 24 von 28 Browser-Tests bestanden, Deploy wurde korrekt blockiert.
+### GitHub-Actions-Lauf #128
 
-### GitHub-Actions-Lauf #126 – aktuell veröffentlichter App-Stand
+Ein Diagnose-Lauf protokollierte ausschließlich die technische Bundle-Struktur um `local_files_only` und wurde ebenfalls bewusst vor dem Deploy gestoppt. Dabei wurde die tatsächliche fehlerhafte Memoize-Stelle des 4.2.0-Bundles eindeutig identifiziert. Es wurden keine Falltexte oder personenbezogenen Daten protokolliert.
 
-Commit: `a6c623b7551ae973c43480240f1f66aae1fb24c6`
+### GitHub-Actions-Lauf #129
+
+Der exakt auf die Bundle-Struktur angepasste Upstream-Patch bestand Runtime-Build, JavaScript-Syntax, Text-only-Architektur und beide synthetischen Sicherheits-/Evidence-Prüfungen. Vier Browser-Smoke-Tests des Crash-Loop-Schutzes schlugen jedoch fehl, weil der Test noch einen v13-Startmarker setzte, den die neue einmalige v14-Migration absichtlich entfernt.
+
+Ergebnis: **24 von 28 Browser-/Mobile-Tests bestanden; Deploy wurde korrekt blockiert.** Die Schutzlogik wurde nicht abgeschwächt. Der Test wurde so angepasst, dass er den Crash-Loop-Schutz nach bereits erfolgter v14-Migration prüft.
+
+### GitHub-Actions-Lauf #130 – aktuell veröffentlichter App-Stand
+
+Commit: `921682b868044b9be181c46b4c456d5788b75983`
 
 Der Lauf ist vollständig erfolgreich abgeschlossen:
 
-- gebündelte Transformers.js-/ONNX-Web-Runtime vorbereitet
+- Transformers.js-4.2.0-Browser-Runtime mit bestätigtem Upstream-Fix #1664 gebaut
 - JavaScript-Syntaxprüfungen bestanden
-- v13-Text-only-Architekturprüfung bestanden
+- Qwen-3.5-Text-only-Architekturprüfung bestanden
 - Qwen-3.5-Textsupport der lokalen Runtime geprüft
 - gemeinsame `ai-engine.js`-Modulinstanz geprüft
-- iOS-Crash-Loop-Schutz mit neuem Modellprofil geprüft
+- iOS-Crash-Loop-Schutz nach v14-Migration geprüft
 - synthetische Evidence-/Sicherheitsregressionen bestanden
 - Chromium und WebKit bestanden
 - Android-ähnlicher Chromium-Viewport bestanden
 - iPhone-ähnlicher WebKit-Viewport bestanden
 - alle **28 von 28 Browser-/Mobile-Smoke-Tests** bestanden
 - GitHub-Pages-Artefakt erfolgreich erstellt und hochgeladen
-- GitHub Pages erfolgreich deployed
+- GitHub Pages hat den Deploy für Build-Version `921682b868044b9be181c46b4c456d5788b75983` erfolgreich gemeldet
 
 Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
 
@@ -108,17 +129,20 @@ Diese automatisierten Tests beweisen weiterhin **nicht**, dass Qwen 3.5 0.8B Tex
 
 Beim nächsten iPhone-Test soll zunächst ausschließlich geprüft werden:
 
-1. ob die v13-Oberfläche ausdrücklich die Textversion nennt,
-2. ob der Gesamtdownload nachvollziehbar fortschreitet statt bei einer Einzeldatei scheinbar zu hängen,
-3. ob das Modell nach dem vollständigen Download tatsächlich `KI ist bereit ✓` erreicht,
-4. ob der Prozess danach stabil bleibt,
-5. ob der Crash-Loop-Schutz bei einem unerwarteten Prozessabbruch einen automatischen weiteren Großdownload verhindert.
+1. die aktuell festgefahrene v13-App vollständig schließen,
+2. HEB Assist neu öffnen; keinen Cache löschen und die PWA nicht neu installieren,
+3. für diesen Test nach Möglichkeit eine stabile einzelne Netzwerkverbindung beibehalten,
+4. beobachten, ob der Download jetzt bis zum vollständigen Dateidownload fortschreitet,
+5. prüfen, ob danach ausdrücklich `KI wird initialisiert` und schließlich `KI ist bereit ✓` erreicht wird,
+6. falls der Prozess unerwartet abbricht, prüfen, ob beim erneuten Öffnen der automatische Großdownload durch den Crash-Loop-Schutz gestoppt wird.
+
+Ein bereits abgebrochener Teil-Download muss vom Browser nicht zwingend vollständig fortsetzbar sein. Deshalb darf für den ersten v14-Versuch nicht versprochen werden, dass die letzten 10 MB aus v13 einfach weitergeladen werden.
 
 Erst wenn der Modellstart bestanden ist, folgt die fachliche Prüfung mit vollständig synthetischen HEB-Fällen.
 
 ## Weiterhin offen
 
-- vollständiger v13-Modellstart auf dem realen Ziel-iPhone bis `KI ist bereit ✓`
+- vollständiger v14-Modellstart auf dem realen Ziel-iPhone bis `KI ist bereit ✓`
 - eine vollständige HEB-Generierung mit einem rein synthetischen Fall
 - fachliche Qualität einschließlich Grammatik, HEB-Struktur, Ressourcenorientierung und fehlender Erfindungen
 - mehrere aufeinanderfolgende Generierungen auf dem realen iPhone

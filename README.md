@@ -29,11 +29,12 @@ HEB-Assist orientiert sich an den offiziellen bayerischen HEB-Bögen für Mensch
 
 Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwendet. Die genaue Struktur steht in `HEB_REFERENCE.md`.
 
-## Technik – v13
+## Technik – v14
 
 - statische HTML/CSS/JavaScript-PWA ohne Backend
 - GitHub Pages als Test-Web-App
 - lokale Laufzeit: **Transformers.js 4.2.0 / ONNX Runtime WebGPU**
+- lokal gebündelte Transformers.js-4.2.0-Runtime enthält den bestätigten Upstream-Fix aus [huggingface/transformers.js#1664](https://github.com/huggingface/transformers.js/pull/1664) gegen mehrfache Modelldatei-Anforderungen bei aktivem `progress_callback`
 - lokaler Modellkandidat: **Qwen 3.5 0.8B Text**, `onnx-community/Qwen3.5-0.8B-Text-ONNX`
 - gepinnte Modellrevision: `1e45daba048899e7f771657ada617ec49350aa91`
 - ausschließlich Textmodell; keine Vision-/Bildmodellteile
@@ -55,6 +56,16 @@ Der reale iPhone-Test von v12 blieb bei einer angezeigten Modellvorbereitung um 
 2. Die Ladeanzeige basierte teilweise auf Fortschritten einzelner Dateien. Dadurch konnte die Oberfläche beispielsweise 94 % anzeigen, obwohl im Hintergrund eine weitere Modelldatei geladen oder vorbereitet wurde.
 
 v13 nutzt deshalb den dedizierten Text-only-ONNX-Export und wertet für den sichtbaren Gesamtfortschritt `progress_total` aus. Wenn Größeninformationen verfügbar sind, zeigt die Oberfläche zusätzlich geladene und gesamte MB an. Erst nach vollständigem Dateidownload wechselt die Anzeige ausdrücklich zur Initialisierung der KI.
+
+## Warum v14 statt v13
+
+Beim realen v13-iPhone-Test lief der Download der tatsächlichen `q4f16`-Modelldatei zunächst bis 423 von 448 MB und anschließend bis 438 von 448 MB. Bei 98 % war danach kein weiterer sichtbarer Fortschritt mehr erkennbar. Dieser einzelne Geräteversuch beweist für sich allein noch nicht die genaue Ursache.
+
+Bei der anschließenden Runtime-Prüfung wurde jedoch ein bestätigter Fehler in exakt der verwendeten Abhängigkeit **Transformers.js 4.2.0** gefunden: Bei aktivem `progress_callback` können Modelldateien mehrfach angefordert werden. Das Problem ist als [Issue #1663](https://github.com/huggingface/transformers.js/issues/1663) dokumentiert und wurde upstream mit [PR #1664](https://github.com/huggingface/transformers.js/pull/1664) behoben.
+
+Da HEB-Assist für die Fortschrittsanzeige genau diesen Callback benötigt und die verwendete npm-Version weiterhin 4.2.0 ist, übernimmt der v14-Build exakt die upstream korrigierte Normalisierung des Memoize-Schlüssels in die lokal gebündelte Browser-Runtime. Der Build bricht ab, wenn die erwartete fehlerhafte Stelle nicht eindeutig gefunden oder der Fix nicht nachweisbar eingebaut wurde.
+
+Das Qwen-Textmodell, die Quantisierung, die HEB-Generierungslogik und die Datenschutzlogik wurden für v14 nicht gewechselt.
 
 ## HEB-Synthese und lokale Qualitätsprüfung
 
@@ -81,13 +92,15 @@ v13 nutzt deshalb den dedizierten Text-only-ONNX-Export und wertet für den sich
 
 HEB-Assist enthält einen Schutz gegen automatische Großdownload-Schleifen nach einem unerwarteten Safari-/PWA-Prozessabbruch während der Modellinitialisierung. Vor einem Modellstart wird lokal nur ein technischer Marker aus Modellprofil und Startzeit gesetzt. Wird die Seite während eines noch nicht abgeschlossenen Starts neu geladen, startet HEB-Assist den Modelldownload nicht automatisch erneut, sondern stoppt und verlangt einen bewussten manuellen Neustart.
 
+v14 entfernt einmalig einen zurückgebliebenen v13-Startmarker, damit ein bereits festgefahrener v13-Versuch den ersten v14-Start nicht blockiert. Danach bleibt der Crash-Loop-Schutz unverändert aktiv: Ein neuer unvollständiger v14-Start wird beim nächsten Öffnen wieder erkannt und ein automatischer zweiter Großdownload wird gestoppt.
+
 Dieser Marker enthält keinen Falltext und keine HEB-Ausgabe. Nach einem erfolgreichen Modellstart oder einem regulär abgefangenen technischen Fehler wird er wieder entfernt.
 
 Die CI prüft außerdem, dass `ai-engine.js` nur unter einer einheitlichen Modul-URL geladen wird. Dadurch teilen Bootstrap und App dieselbe KI-Instanz und denselben Ladezustand.
 
 ## Lokale Runtime und Modell-Cache
 
-Die JavaScript-KI-Laufzeit wird aus dem npm-Paket `@huggingface/transformers` beim GitHub-Actions-Deploy lokal gebündelt. Zusätzlich werden die für ONNX Runtime Web benötigten Runtime-Dateien mit der PWA ausgeliefert und über den Service Worker gecacht.
+Die JavaScript-KI-Laufzeit wird aus dem npm-Paket `@huggingface/transformers` beim GitHub-Actions-Deploy lokal gebündelt. Im v14-Build wird zusätzlich der bestätigte Upstream-Fix aus Transformers.js PR #1664 auf die 4.2.0-Browser-Runtime angewendet und technisch verifiziert. Zusätzlich werden die für ONNX Runtime Web benötigten Runtime-Dateien mit der PWA ausgeliefert und über den Service Worker gecacht.
 
 Die Modellressourcen selbst werden beim ersten Modellstart von Hugging Face geladen. Transformers.js nutzt den Browser-Cache, soweit dieser vom Browser unterstützt und nicht vom Betriebssystem bereinigt wird. Ein erneuter vollständiger Download soll dadurch nach Möglichkeit vermieden werden, kann technisch aber nicht garantiert ausgeschlossen werden.
 
@@ -99,10 +112,11 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 
 - JavaScript-Syntaxprüfungen
 - Build der lokal gebündelten Transformers.js-/ONNX-Web-Runtime
-- v13-Architekturprüfung für den dedizierten Qwen-3.5-Text-Export
+- harte Prüfung, dass der v14-Runtime-Fix für Transformers.js #1664 eindeutig angewendet wurde
+- Architekturprüfung für den dedizierten Qwen-3.5-Text-Export
 - Prüfung des Qwen-3.5-Textsupport-Exports der Runtime
 - Prüfung auf eine gemeinsame `ai-engine.js`-Modulinstanz
-- Prüfung des iOS-Crash-Loop-Schutzes
+- Prüfung des iOS-Crash-Loop-Schutzes nach der v14-Guard-Migration
 - synthetische Quellen-/Sicherheits-Regressionstests
 - Reasoning-Ausgabeparser-/Sicherheitstests
 - Browser-Smoke-Tests in Chromium und WebKit
@@ -113,7 +127,7 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 - Dark Mode und mobile Viewport-Prüfungen
 - Manifest, Service Worker und lokal ausgelieferte Runtime-Dateien
 
-Der erste v13-Lauf #125 wurde durch einen veralteten Testwert für das v12-Modellprofil korrekt gestoppt; 24 von 28 Browser-Tests waren grün. Der Test wurde auf das neue v13-Profil aktualisiert. GitHub-Actions-Lauf **#126** für Commit `a6c623b7551ae973c43480240f1f66aae1fb24c6` ist vollständig erfolgreich abgeschlossen; alle Browser-/Mobile-Smoke-Tests bestanden und GitHub Pages wurde erfolgreich deployed.
+GitHub-Actions-Lauf **#130** für Commit `921682b868044b9be181c46b4c456d5788b75983` ist vollständig erfolgreich abgeschlossen. Die gepatchte Runtime wurde gebaut, alle **28 von 28 Browser-/Mobile-Smoke-Tests** bestanden, das Pages-Artefakt wurde hochgeladen und GitHub Pages meldete den Deploy für genau diesen Commit als erfolgreich.
 
 Ein fehlgeschlagener relevanter Test verhindert den Deploy. Diese Tests ersetzen keine echte WebGPU-Inferenz auf einem realen iPhone, Android-Gerät oder Desktop und keine fachliche Qualitätsprüfung echter Modellgenerationen mit synthetischen Fällen.
 
@@ -129,4 +143,4 @@ Solange HEB-Assist ausdrücklich Test-/Entwicklungsprojekt ist, darf direkt auf 
 
 ## Aktueller Status
 
-Prototyp / Qualitätstest. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.** Bis zur fachlichen Freigabe ausschließlich vollständig synthetische Testfälle verwenden.
+Prototyp / Qualitätstest. **Nicht für echte Falldaten oder produktive Dokumentation freigegeben.** Der reale v14-Modellstart auf dem Ziel-iPhone steht noch aus. Bis zur fachlichen Freigabe ausschließlich vollständig synthetische Testfälle verwenden.
