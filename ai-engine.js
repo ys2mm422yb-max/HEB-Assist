@@ -10,43 +10,50 @@ import {
 const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.82';
 const MODEL_KEY = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
 const MODEL_LABEL = 'Llama 3.2 1B Instruct';
-const MODEL_PROFILE = 'webllm-llama32-1b-evidence-gated-v5-ctx2048';
+const MODEL_PROFILE = 'webllm-llama32-1b-section-selector-v6-ctx2048';
 const CONTEXT_WINDOW_SIZE = 2048;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
 const UNSAFE_TEXT = 'Die vorhandenen Angaben konnten für diesen Unterpunkt nicht sicher formuliert werden.';
 
-// Architektur v5:
-// - Die echte lokale KI muss vollständig gestartet sein.
-// - Die KI ordnet ausschließlich vorhandene Quellen-IDs den HEB-Unterpunkten zu.
-// - Jeder Formulierungsschritt erhält genau einen Originalbeleg.
-// - Harte lokale Prüfregeln blockieren erfundene Ursachen, Zahlen, Bedeutungsverschiebungen,
-//   degenerierte Sprache und andere bekannte Fehlermuster.
-// - Nur bei rein lexikalischen Zweifeln darf eine zweite lokale KI-Prüfung entscheiden.
-// - Scheitert eine sichere Umformulierung, darf ausschließlich der unveränderte Originalbeleg
-//   übernommen werden, sofern er selbst ein vollständiger, unauffälliger Satz ist.
-// - Gelingt auch das nicht, wird der betreffende Unterpunkt transparent als nicht sicher
-//   formulierbar markiert. Es wird niemals ein erfundener Ersatztext erzeugt.
+// Architektur v6
+// ----------------
+// Kleine lokale Modelle waren mit einer einzigen mehrzeiligen Gesamtzuordnung
+// unzuverlässig. Deshalb wird jetzt jeder offizielle HEB-Unterpunkt einzeln
+// bearbeitet:
+// 1) Die lokale KI wählt für genau EINEN Unterpunkt nur vorhandene Quellen-IDs.
+// 2) Jede ausgewählte Originalaussage wird einzeln formuliert.
+// 3) Harte lokale Prüfungen blockieren bekannte Bedeutungsverschiebungen.
+// 4) Jede echte Umformulierung wird zusätzlich von der lokalen KI gegen genau
+//    diesen Originalbeleg auf Faktentreue geprüft.
+// 5) Wenn die KI keine sichere Verbesserung findet, wird sie ausdrücklich
+//    angewiesen, den Originalsatz selbst unverändert auszugeben.
+// 6) Ein einzelner nicht sicher formulierbarer Unterpunkt zerstört nie mehr den
+//    gesamten HEB-Entwurf. Es gibt keinen regelbasierten Ersatz-HEB.
 
-const CLASSIFIER_SYSTEM = `Du ordnest ausschließlich Quellen-IDs aus einer Fallbeschreibung den offiziellen HEB-Unterpunkten zu.
-Erfinde niemals Inhalte. Schreibe keine HEB-Texte und keine Begründungen.
-Verwende nur IDs, die in der Eingabe tatsächlich vorhanden sind.
-Eine Quellen-ID darf mehreren Unterpunkten zugeordnet werden, wenn derselbe Beleg dort wirklich relevant ist.
-Ziele nur zuordnen, wenn im Original tatsächlich ein Ziel, Wunsch, Soll-Zustand oder eine Zukunftsabsicht genannt ist.
-Maßnahmen nur zuordnen, wenn im Original eine konkrete Unterstützung beschrieben oder ausdrücklich vorgesehen ist.`;
+const SELECTOR_SYSTEM = `Du wählst ausschließlich Quellen-IDs für genau einen offiziellen HEB-Unterpunkt aus.
+Erfinde nichts und schreibe keinen HEB-Text.
+Verwende nur IDs, die in der Liste tatsächlich vorkommen.
+Antworte ausschließlich mit passenden IDs, durch Komma getrennt, oder mit NONE.
+Eine konkrete aktuelle Situations- oder Ressourcenaussage gehört bei HEB A in current.
+Ein Unterstützungsbedarf gehört nur in support, wenn die Quelle tatsächlich Hilfe, Unterstützung, Erinnerung, Impuls, Begleitung oder vergleichbaren Bedarf beschreibt.
+Ein Ziel gehört nur in goals, wenn die Quelle ausdrücklich einen Wunsch, ein Ziel oder einen zukünftigen Soll-Zustand nennt.
+Eine Maßnahme gehört nur in measures, wenn die Quelle eine konkrete Unterstützung oder Handlung beschreibt, die tatsächlich erfolgt oder vorgesehen ist.`;
 
-const WRITER_SYSTEM = `Du formulierst genau einen kurzen professionellen HEB-Satz für die sozialpsychiatrische Eingliederungshilfe.
-Du bekommst genau einen freigegebenen Originalbeleg. Verwende ausschließlich dessen Inhalt.
-Du darfst Grammatik und Satzstellung verbessern, aber keine neue Tatsache ergänzen und nichts aus anderen Aussagen vermischen.
+const WRITER_SYSTEM = `Du formulierst genau einen kurzen professionellen Satz für die sozialpsychiatrische Eingliederungshilfe.
+Du bekommst genau einen Originalbeleg. Verwende ausschließlich dessen Inhalt.
+Du darfst Grammatik, Satzstellung und fachlich neutrale Begriffe verbessern, aber keine neue Tatsache ergänzen.
 Verboten sind neue Diagnosen, Symptome, Ursachen, Motive, Bewertungen, Fähigkeiten, Risiken, Entwicklungen, Ziele, Maßnahmen oder Anbieter.
-Wenn der Originalbeleg nur einen Impuls zum Beginn beschreibt, darfst du daraus keine Unterstützung bei der Durchführung machen.
-Wenn der Originalbeleg Selbstständigkeit beschreibt, darfst du diese nicht abschwächen.
-Keine moralischen Bewertungen, keine Überschrift, keine Liste, kein Markdown, kein Ausrufezeichen, keine Meta-Kommentare.
+Unterstützung beim Beginn darf nicht zu Unterstützung bei der Durchführung werden.
+Vorhandene Selbstständigkeit darf nicht abgeschwächt werden.
+Keine moralischen Bewertungen, keine Liste, kein Markdown, kein Ausrufezeichen, keine Meta-Kommentare.
 Schreibe korrektes, natürliches, sachliches und ressourcenorientiertes Deutsch.
-Gib nur den fertigen Satz aus.`;
+Wenn du keine sichere bessere Formulierung findest, gib den Originalbeleg unverändert aus.
+Gib nur genau einen vollständigen Satz aus.`;
 
 const VERIFIER_SYSTEM = `Du prüfst nur Faktentreue zwischen genau einem Originalbeleg und genau einem HEB-Satz.
-Antworte JA, wenn der HEB-Satz denselben Sachverhalt nur sprachlich professioneller ausdrückt.
-Antworte NEIN, sobald eine neue Tatsache, Ursache, Diagnose, Einschränkung, Fähigkeit, Maßnahme, Ziel, Entwicklung oder Bewertung hinzukommt oder der Umfang der Unterstützung verändert wird.
+Antworte JA nur dann, wenn jede Tatsachenaussage vollständig durch den Originalbeleg gedeckt ist und Umfang, Ursache, Selbstständigkeit sowie Unterstützungsbedarf nicht verändert wurden.
+Antworte NEIN bei jeder neuen Tatsache, Ursache, Diagnose, Einschränkung, Fähigkeit, Maßnahme, Ziel, Entwicklung oder Bewertung.
+Stilistische Umformulierungen ohne neue Tatsache sind erlaubt.
 Antworte exakt nur mit JA oder NEIN.`;
 
 const SECTION_MODES = {
@@ -74,25 +81,37 @@ const SECTION_MODES = {
 
 const SECTION_LENGTHS = {
   A: {
-    current: { maxWords: 46, maxEvidence: 3, microWords: 22 },
-    support: { maxWords: 34, maxEvidence: 2, microWords: 20 },
+    current: { maxWords: 52, maxEvidence: 4, microWords: 24 },
+    support: { maxWords: 34, maxEvidence: 2, microWords: 21 },
     goals: { maxWords: 28, maxEvidence: 1, microWords: 24 },
-    measures: { maxWords: 36, maxEvidence: 2, microWords: 20 },
+    measures: { maxWords: 38, maxEvidence: 2, microWords: 22 },
   },
   B: {
-    reflection: { maxWords: 44, maxEvidence: 2, microWords: 22 },
-    development: { maxWords: 50, maxEvidence: 3, microWords: 22 },
-    support: { maxWords: 32, maxEvidence: 2, microWords: 19 },
+    reflection: { maxWords: 44, maxEvidence: 2, microWords: 23 },
+    development: { maxWords: 52, maxEvidence: 3, microWords: 23 },
+    support: { maxWords: 34, maxEvidence: 2, microWords: 21 },
     goals: { maxWords: 28, maxEvidence: 1, microWords: 24 },
-    measures: { maxWords: 36, maxEvidence: 2, microWords: 20 },
+    measures: { maxWords: 38, maxEvidence: 2, microWords: 22 },
   },
   C: {
-    reflection: { maxWords: 44, maxEvidence: 2, microWords: 22 },
-    development: { maxWords: 48, maxEvidence: 3, microWords: 21 },
-    remainingSupport: { maxWords: 32, maxEvidence: 2, microWords: 19 },
-    furtherMeasures: { maxWords: 34, maxEvidence: 2, microWords: 20 },
+    reflection: { maxWords: 44, maxEvidence: 2, microWords: 23 },
+    development: { maxWords: 50, maxEvidence: 3, microWords: 22 },
+    remainingSupport: { maxWords: 34, maxEvidence: 2, microWords: 21 },
+    furtherMeasures: { maxWords: 36, maxEvidence: 2, microWords: 21 },
     provider: { maxWords: 18, maxEvidence: 1, microWords: 18 },
   },
+};
+
+const SELECTION_GUIDANCE = {
+  current: 'Wähle konkrete aktuelle Situationen, Schwierigkeiten, Ressourcen und vorhandene Selbstständigkeit. Unterstützungsbedarf darf zusätzlich vorkommen.',
+  support: 'Wähle nur Aussagen, die tatsächlich einen Hilfebedarf oder eine notwendige Unterstützung erkennen lassen.',
+  goals: 'Wähle nur ausdrücklich genannte Ziele, Wünsche oder zukünftige Soll-Zustände.',
+  measures: 'Wähle nur konkrete Unterstützungen oder Handlungen, die tatsächlich beschrieben oder ausdrücklich vorgesehen sind.',
+  reflection: 'Wähle nur Aussagen zu tatsächlich durchgeführten Maßnahmen und nur ausdrücklich beschriebenem Verlauf oder Ergebnis.',
+  development: 'Wähle nur Aussagen mit erkennbarem zeitlichem Vergleich, Entwicklung, Stabilität oder Verschlechterung.',
+  remainingSupport: 'Wähle nur ausdrücklich noch bestehenden Hilfebedarf.',
+  furtherMeasures: 'Wähle nur ausdrücklich vorgesehene weitere Maßnahmen.',
+  provider: 'Wähle nur Aussagen, in denen ausdrücklich steht, wer eine weitere Maßnahme erbringt.',
 };
 
 const WRITING_GUIDANCE = {
@@ -184,7 +203,7 @@ async function prepareRuntime(onProgress) {
     throw new Error(`Das lokale Modell ${MODEL_KEY} wird von WebLLM 0.2.82 nicht unterstützt.`);
   }
 
-  try { await navigator.storage?.persist?.(); } catch { /* optional */ }
+  try { await navigator.storage?.persist?.(); } catch { /* optionale Browser-Optimierung */ }
   webllmModule = webllm;
   appConfig = config;
   return { webllm, appConfig: config };
@@ -232,7 +251,7 @@ async function loadEngine(onProgress) {
         runtimeLabel: 'WebLLM 0.2.82',
         persistentCache: 'Cache API',
         contextLength: CONTEXT_WINDOW_SIZE,
-        pipeline: 'Quellengebundene Generierung mit sicherer Originalbeleg-Übernahme',
+        pipeline: 'Unterpunktweise Quellenwahl mit beleggebundener Mikro-Generierung',
       };
       setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
       return engine;
@@ -263,16 +282,6 @@ function normalizeOutput(text) {
     .trim();
 }
 
-function normalizeClassifierOutput(text) {
-  return String(text || '')
-    .replace(/<\|im_start\|>|<\|im_end\|>|<bos>|<eos>/gi, '')
-    .replace(/^assistant\s*:?\s*/i, '')
-    .replace(/\r/g, '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
-}
-
 function wordCount(text) {
   return (String(text || '').trim().match(/\S+/g) || []).length;
 }
@@ -286,76 +295,79 @@ function hasDevelopmentEvidence(notes) {
 }
 
 function getLengthProfile(formType, sectionMode) {
-  return SECTION_LENGTHS[formType]?.[sectionMode] || { maxWords: 36, maxEvidence: 2, microWords: 20 };
+  return SECTION_LENGTHS[formType]?.[sectionMode] || { maxWords: 36, maxEvidence: 2, microWords: 21 };
 }
 
-function evidenceLimitsFor(formType) {
-  const result = {};
-  for (const [mode] of SECTION_MODES[formType] || SECTION_MODES.A) {
-    result[mode] = getLengthProfile(formType, mode).maxEvidence;
-  }
-  return result;
-}
-
-function classifierFormat(formType) {
-  return (SECTION_MODES[formType] || SECTION_MODES.A).map(([mode]) => `${mode}=`).join('\n');
-}
-
-function buildClassifierPrompt({ units, formType, strict = false }) {
-  const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
-  const sections = SECTION_MODES[formType] || SECTION_MODES.A;
-  const sectionText = sections.map(([mode, label]) => `${mode}: ${label}`).join('\n');
-  const limits = sections.map(([mode]) => `${mode} höchstens ${getLengthProfile(formType, mode).maxEvidence} IDs`).join('; ');
-  return `HEB-Bogen: ${form.label}\n\nUnterpunkte:\n${sectionText}\n\nOriginalquellen:\n${evidenceCatalog(units)}\n\nOrdne nur passende Quellen-IDs zu. Priorisiere verschiedene wichtige Aspekte. ${limits}.\n${strict ? 'Antworte ohne jeden Zusatz exakt im Format.' : 'Schreibe keine HEB-Texte, nur IDs.'}\n\nFormat:\n${classifierFormat(formType)}`;
-}
-
-function classificationNeedsRetry(map, { formType }) {
-  const sections = SECTION_MODES[formType] || SECTION_MODES.A;
-  const allIds = sections.flatMap(([mode]) => map[mode] || []);
-  if (!allIds.length) return true;
-  if (formType === 'A' && !(map.current || []).length) return true;
+function shouldSkipSectionSelection(formType, sectionMode, notes) {
+  if ((formType === 'A' || formType === 'B') && sectionMode === 'goals' && !hasGoalEvidence(notes)) return true;
+  if ((formType === 'B' || formType === 'C') && sectionMode === 'development' && !hasDevelopmentEvidence(notes)) return true;
   return false;
 }
 
-function applyEvidencePolicy(map, { formType, notes }) {
-  const result = {};
-  for (const [mode] of SECTION_MODES[formType] || SECTION_MODES.A) result[mode] = [...(map[mode] || [])];
-  if ((formType === 'A' || formType === 'B') && !hasGoalEvidence(notes)) result.goals = [];
-  if ((formType === 'B' || formType === 'C') && !hasDevelopmentEvidence(notes)) result.development = [];
-  return result;
+function buildSelectorPrompt({ units, formType, area, sectionMode, sectionLabel, maxEvidence, strict }) {
+  const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
+  const guide = SELECTION_GUIDANCE[sectionMode] || 'Wähle nur unmittelbar passende Aussagen.';
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\n${guide}\n\nOriginalquellen:\n${evidenceCatalog(units)}\n\nWähle höchstens ${maxEvidence} passende Quellen-IDs.${strict ? ' Antworte exakt nur mit IDs wie S1,S3 oder NONE.' : ' Keine Begründung, kein Fließtext.'}`;
 }
 
-async function runClassifier(engine, prompt, strict = false) {
+async function runSectionSelector(engine, prompt, strict = false) {
   const response = await engine.chat.completions.create({
     stream: false,
     messages: [
-      { role: 'system', content: CLASSIFIER_SYSTEM },
+      { role: 'system', content: SELECTOR_SYSTEM },
       { role: 'user', content: prompt },
     ],
     temperature: 0,
-    top_p: 0.9,
-    repetition_penalty: 1.04,
-    max_tokens: strict ? 88 : 104,
+    top_p: 1,
+    repetition_penalty: 1,
+    max_tokens: strict ? 20 : 28,
   });
-  return normalizeClassifierOutput(response?.choices?.[0]?.message?.content || '');
+  return normalizeOutput(response?.choices?.[0]?.message?.content || '');
 }
 
-async function classifyEvidence(engine, { notes, units, formType, onProgress }) {
-  const modes = (SECTION_MODES[formType] || SECTION_MODES.A).map(([mode]) => mode);
-  const limits = evidenceLimitsFor(formType);
-  setModelState({ status: 'generating', percent: 100, text: 'KI prüft und ordnet die Angaben …', error: null }, onProgress);
+function parseSectionIds(raw, sectionMode, units, maxEvidence) {
+  const map = parseEvidenceClassification(
+    `${sectionMode}=${raw}`,
+    [sectionMode],
+    units,
+    { [sectionMode]: maxEvidence },
+  );
+  return map[sectionMode] || [];
+}
 
-  let raw = await runClassifier(engine, buildClassifierPrompt({ units, formType, strict: false }), false);
-  let map = applyEvidencePolicy(parseEvidenceClassification(raw, modes, units, limits), { formType, notes });
-  if (!classificationNeedsRetry(map, { formType })) return map;
+async function selectEvidenceForSection(engine, context) {
+  const { notes, units, formType, area, sectionMode, sectionLabel, onProgress } = context;
+  const maxEvidence = getLengthProfile(formType, sectionMode).maxEvidence;
 
-  raw = await runClassifier(engine, buildClassifierPrompt({ units, formType, strict: true }), true);
-  map = applyEvidencePolicy(parseEvidenceClassification(raw, modes, units, limits), { formType, notes });
-  if (!classificationNeedsRetry(map, { formType })) return map;
+  if (shouldSkipSectionSelection(formType, sectionMode, notes)) return [];
 
-  const error = new Error('Die lokale KI konnte die Originalangaben nicht zuverlässig den HEB-Unterpunkten zuordnen.');
-  error.code = 'QUALITY_REJECTED';
-  throw error;
+  setModelState({
+    status: 'generating',
+    percent: 100,
+    text: `KI ordnet Angaben für ${sectionLabel.slice(0, 2)} zu …`,
+    error: null,
+  }, onProgress);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const strict = attempt === 1;
+    const raw = await runSectionSelector(
+      engine,
+      buildSelectorPrompt({ units, formType, area, sectionMode, sectionLabel, maxEvidence, strict }),
+      strict,
+    );
+    const ids = parseSectionIds(raw, sectionMode, units, maxEvidence);
+    if (ids.length) return ids;
+
+    const explicitNone = /\b(?:NONE|KEINE|KEIN)\b/i.test(raw);
+    // Für aktuelle Situationsfelder erzwingen wir einen zweiten KI-Versuch, weil
+    // dort bei einer konkreten Eingabe normalerweise mindestens ein Beleg passt.
+    const requiresRetry = sectionMode === 'current' || sectionMode === 'reflection' || sectionMode === 'development';
+    if (explicitNone && !requiresRetry) return [];
+  }
+
+  // Kein technischer Fehler und kein regelbasierter Ersatz: dieser Unterpunkt
+  // bleibt transparent ohne sicher ausgewählte Quelle.
+  return [];
 }
 
 function buildMicroPrompt({ formType, area, sectionMode, sectionLabel, evidenceText, strictLevel = 0 }) {
@@ -365,13 +377,14 @@ function buildMicroPrompt({ formType, area, sectionMode, sectionLabel, evidenceT
   const strictText = strictLevel === 1
     ? '\nBleibe sehr nah am Originalwortlaut. Tausche keine inhaltstragenden Begriffe aus.'
     : strictLevel >= 2
-      ? '\nFormuliere nur minimal um. Ändere möglichst nur Satzstellung und Grammatik.'
+      ? '\nWenn eine sichere Umformulierung nicht möglich ist, gib den Originalbeleg EXAKT und vollständig unverändert aus.'
       : '';
-  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nEinziger erlaubter Originalbeleg:\n${evidenceText}\n\n${guidance}\nFormuliere genau EINEN vollständigen Satz mit höchstens ${length.microWords} Wörtern. Inhalt und Umfang müssen gleich bleiben.${strictText}`;
+
+  return `HEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\nUnterpunkt: ${sectionLabel}\n\nEinziger erlaubter Originalbeleg:\n${evidenceText}\n\n${guidance}\nFormuliere genau EINEN vollständigen Satz mit höchstens ${length.microWords} Wörtern. Inhalt und Umfang müssen vollständig gleich bleiben.${strictText}`;
 }
 
 function buildVerifierPrompt(evidenceText, candidate) {
-  return `Originalbeleg:\n${evidenceText}\n\nHEB-Satz:\n${candidate}\n\nIst der HEB-Satz vollständig durch den Originalbeleg gedeckt, ohne Bedeutungsverschiebung oder neue Tatsache?`;
+  return `Originalbeleg:\n${evidenceText}\n\nHEB-Satz:\n${candidate}\n\nIst jede Tatsachenaussage des HEB-Satzes vollständig durch den Originalbeleg gedeckt und in ihrer Bedeutung unverändert?`;
 }
 
 async function runMicroWriter(engine, prompt, strictLevel = 0) {
@@ -382,9 +395,9 @@ async function runMicroWriter(engine, prompt, strictLevel = 0) {
       { role: 'user', content: prompt },
     ],
     temperature: 0,
-    top_p: 0.9,
-    repetition_penalty: strictLevel >= 2 ? 1.08 : strictLevel === 1 ? 1.10 : 1.05,
-    max_tokens: strictLevel >= 2 ? 56 : strictLevel === 1 ? 64 : 72,
+    top_p: 1,
+    repetition_penalty: strictLevel === 1 ? 1.04 : 1,
+    max_tokens: strictLevel >= 2 ? 72 : 80,
   });
   return normalizeOutput(response?.choices?.[0]?.message?.content || '');
 }
@@ -405,44 +418,31 @@ async function runMicroVerifier(engine, evidenceText, candidate) {
   return /^JA\b/.test(verdict);
 }
 
-function onlyLexicalUncertainty(reasons) {
-  return reasons.length > 0 && reasons.every((reason) => reason.startsWith('nicht belegte Inhaltswörter'));
-}
-
-function sourceCanBeUsedVerbatim(evidenceText, maxWords) {
-  const source = normalizeOutput(evidenceText);
-  if (!source || wordCount(source) > maxWords + 6) return false;
-  const validation = validateAnchoredHebText(source, [source], { maxWords });
-  return validation.ok;
+function normalizedComparable(text) {
+  return normalizeOutput(text).toLocaleLowerCase('de-DE');
 }
 
 async function generateMicroSentence(engine, context, evidenceText) {
   const length = getLengthProfile(context.formType, context.sectionMode);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const text = await runMicroWriter(
+    const candidate = await runMicroWriter(
       engine,
       buildMicroPrompt({ ...context, evidenceText, strictLevel: attempt }),
       attempt,
     );
+    if (!candidate) continue;
 
-    const validation = validateAnchoredHebText(text, [evidenceText], { maxWords: length.microWords });
-    if (validation.ok) return text;
+    const hardCheck = validateAnchoredHebText(candidate, [evidenceText], { maxWords: length.microWords });
+    if (!hardCheck.ok) continue;
 
-    // Die zweite KI-Prüfung wird nur bei rein lexikalischer Unsicherheit eingesetzt.
-    // Harte Fehler wie erfundene Ursachen, Scope-Verschiebung oder kaputte Grammatik
-    // dürfen dadurch niemals überstimmt werden.
-    if (onlyLexicalUncertainty(validation.reasons)) {
-      const verified = await runMicroVerifier(engine, evidenceText, text);
-      if (verified) return text;
-    }
-  }
+    // Ein vom Modell exakt wiedergegebener Originalbeleg ist per Definition
+    // vollständig quellengetreu. Jede echte Umformulierung braucht die zweite
+    // semantische KI-Gegenprüfung.
+    if (normalizedComparable(candidate) === normalizedComparable(evidenceText)) return candidate;
 
-  // Transparente Sicherheitsstufe: kein erfundener Fallback. Wenn die KI denselben
-  // Inhalt nicht zuverlässig umformulieren kann, darf nur der Originalbeleg selbst
-  // unverändert übernommen werden.
-  if (sourceCanBeUsedVerbatim(evidenceText, length.maxWords)) {
-    return normalizeOutput(evidenceText);
+    const verified = await runMicroVerifier(engine, evidenceText, candidate);
+    if (verified) return candidate;
   }
 
   return '';
@@ -451,42 +451,55 @@ async function generateMicroSentence(engine, context, evidenceText) {
 function combineMicroSentences(sentences, maxWords) {
   const chosen = [];
   const seen = new Set();
+
   for (const raw of sentences) {
     const sentence = normalizeOutput(raw);
     if (!sentence) continue;
-    const key = sentence.toLowerCase();
+    const key = sentence.toLocaleLowerCase('de-DE');
     if (seen.has(key)) continue;
+
     const candidate = [...chosen, sentence].join(' ');
-    if (wordCount(candidate) > maxWords + 6) continue;
+    if (wordCount(candidate) > maxWords + 4) continue;
     seen.add(key);
     chosen.push(sentence);
   }
+
   return chosen.join(' ').trim();
 }
 
-async function generateSection(engine, context) {
-  if (!context.evidenceTexts.length) return MISSING_TEXT;
+async function formulateSelectedEvidence(engine, context, evidenceTexts) {
+  if (!evidenceTexts.length) return MISSING_TEXT;
+
   const length = getLengthProfile(context.formType, context.sectionMode);
   const microSentences = [];
+  let runtimeFailure = null;
 
-  for (const evidenceText of context.evidenceTexts.slice(0, length.maxEvidence)) {
+  for (const evidenceText of evidenceTexts.slice(0, length.maxEvidence)) {
     try {
       const sentence = await generateMicroSentence(engine, context, evidenceText);
       if (sentence) microSentences.push(sentence);
-    } catch {
-      // Ein einzelner misslungener Mikrosatz darf keinen gesamten HEB zerstören.
-      // Es wird aber auch kein Ersatzinhalt erzeugt.
+    } catch (error) {
+      runtimeFailure = error;
     }
   }
 
   const combined = combineMicroSentences(microSentences, length.maxWords);
-  return combined || UNSAFE_TEXT;
+  if (combined) return combined;
+
+  if (runtimeFailure) {
+    const error = new Error(`Technischer Fehler bei der lokalen KI in ${context.sectionLabel}: ${runtimeFailure?.message || runtimeFailure}`);
+    error.code = 'GENERATION_RUNTIME_ERROR';
+    throw error;
+  }
+
+  return UNSAFE_TEXT;
 }
 
 export async function generateHebText({ notes, area, formType, mode = 'complete', onProgress }) {
   const engine = await loadEngine(onProgress);
   const sections = SECTION_MODES[formType] || SECTION_MODES.A;
   const units = splitEvidenceUnits(notes);
+
   if (!units.length) {
     const error = new Error('Die Eingabe enthält keine verwertbaren Angaben.');
     error.code = 'QUALITY_REJECTED';
@@ -494,12 +507,21 @@ export async function generateHebText({ notes, area, formType, mode = 'complete'
   }
 
   try {
-    const evidenceMap = await classifyEvidence(engine, { notes, units, formType, onProgress });
     const outputs = [];
 
     for (let index = 0; index < sections.length; index += 1) {
       const [sectionMode, sectionLabel] = sections[index];
-      const evidenceTexts = getEvidenceTexts(units, evidenceMap[sectionMode] || []);
+      const selectedIds = await selectEvidenceForSection(engine, {
+        notes,
+        units,
+        formType,
+        area,
+        sectionMode,
+        sectionLabel,
+        onProgress,
+      });
+      const evidenceTexts = getEvidenceTexts(units, selectedIds);
+
       setModelState({
         status: 'generating',
         percent: 100,
@@ -509,27 +531,23 @@ export async function generateHebText({ notes, area, formType, mode = 'complete'
         error: null,
       }, onProgress);
 
-      const sectionText = await generateSection(engine, {
+      const sectionText = await formulateSelectedEvidence(engine, {
         formType,
         area,
         sectionMode,
         sectionLabel,
-        evidenceTexts,
-      });
+      }, evidenceTexts);
+
       outputs.push(`${sectionLabel}\n${sectionText}`);
     }
 
     const finalText = outputs.join('\n\n').trim();
-    if (!finalText) {
-      const error = new Error('Es konnte kein sicherer HEB-Entwurf erstellt werden.');
-      error.code = 'QUALITY_REJECTED';
-      throw error;
-    }
-
     setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
     return finalText;
   } catch (error) {
-    if (engineInstance) setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+    if (engineInstance) {
+      setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+    }
     throw error;
   }
 }
