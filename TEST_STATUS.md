@@ -18,6 +18,9 @@ Stand: 2026-09-06
 - HEB A / B / C und die fünf offiziellen HEB-Bereiche wurden anhand der bereitgestellten bayerischen HEB-Bögen abgeglichen.
 - Die App-Shell aktualisiert sich automatisch über GitHub Pages / Service Worker.
 - Die eigentliche HEB-Eingabe bleibt bis zum vollständigen Start der lokalen KI gesperrt.
+- Der aktuelle Browser-Smoke-Testlauf ist vollständig grün: 16 von 16 Tests bestanden.
+- Der zuvor im iPhone-ähnlichen WebKit-Test gemessene horizontale Overflow ist im automatisierten Folgetest nicht mehr aufgetreten.
+- Der zugehörige GitHub-Pages-Deploy wurde erfolgreich abgeschlossen.
 
 ## Ergebnis der bisherigen iPhone-KI-Tests
 
@@ -91,14 +94,14 @@ Der GitHub-Pages-Workflow prüft vor dem Deploy:
 
 Ein fehlgeschlagener relevanter Test verhindert den GitHub-Pages-Deploy.
 
-### Letzter bestätigter Browserlauf vor dem aktuellen Fix
+### Letzter bestätigter Browserlauf
 
 - 16 Browser-Smoke-Tests wurden gestartet.
-- 15 Tests bestanden.
-- Der iPhone-ähnliche WebKit-Test meldete einen horizontalen Overflow von **170 px**.
-- Der GitHub-Pages-Deploy wurde deshalb korrekt blockiert und der fehlerhafte Stand nicht veröffentlicht.
-- Als Gegenmaßnahme wurde eine zusätzliche mobile CSS-Schutzschicht (`mobile-fixes.css`) ergänzt, die insbesondere intrinsische Mindestbreiten von Selects und flexiblen Layout-Elementen auf iOS begrenzt.
-- Dieser Fix gilt erst als bestätigt, wenn der nachfolgende GitHub-Actions-Lauf vollständig grün ist und Pages erfolgreich deployed wurde.
+- **16 von 16 Tests bestanden.**
+- Desktop Chromium, Desktop WebKit, Android-ähnliches Chromium und iPhone-ähnliches WebKit waren grün.
+- Der zuvor gemessene horizontale iPhone/WebKit-Overflow von 170 px trat nach der zusätzlichen mobilen CSS-Schutzschicht (`mobile-fixes.css`) im Folgetest nicht mehr auf.
+- JavaScript-Syntaxprüfung und synthetische Quellen-Regressionsprüfung bestanden ebenfalls.
+- GitHub Pages wurde anschließend erfolgreich veröffentlicht.
 
 ## Darstellung
 
