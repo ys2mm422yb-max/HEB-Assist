@@ -8,7 +8,7 @@ HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen und d
 
 ## Aktueller technischer Stand – v11
 
-Der aktuelle Entwicklungsstand verwendet **Gemma 3 1B** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**.
+Der aktuell veröffentlichte Entwicklungsstand verwendet **Gemma 3 1B** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**.
 
 - Modell: `onnx-community/gemma-3-1b-it-ONNX`
 - Revision: `a58439f40017d3b99c7d378ff525e54e0ba08ebf`
@@ -58,7 +58,7 @@ GitHub-Actions-Lauf **#118** ist vollständig erfolgreich abgeschlossen:
 
 Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
 
-Diese automatisierten Tests beweisen weiterhin **nicht**, dass die echte Gemma-3-WebGPU-Modellinitialisierung auf dem realen Ziel-iPhone stabil durchläuft oder fachlich ausreichend gute HEB-Texte erzeugt. Sie belegen aber, dass der zuvor reproduzierbare Browser-Modulimportfehler in den getesteten Chromium-/WebKit-Umgebungen nicht mehr auftritt.
+Diese automatisierten Tests beweisen weiterhin **nicht**, dass die echte WebGPU-Modellinitialisierung auf dem realen Ziel-iPhone stabil durchläuft oder fachlich ausreichend gute HEB-Texte erzeugt. Der reale Test hat inzwischen gezeigt, dass Gemma 3 1B auf dem Ziel-iPhone nicht bis zum Zustand „KI ist bereit“ kommt.
 
 Reine spätere Markdown-Dokumentationsänderungen lösen keinen Pages-Deploy aus und verändern den veröffentlichten App-Code nicht.
 
@@ -70,9 +70,9 @@ Startete vergleichsweise stabil, erzeugte aber mehrfach grammatikalisch und fach
 
 ### Qwen 3 0.6B
 
-Lief auf dem iPhone grundsätzlich, war fachlich jedoch nicht zuverlässig genug. Die gewünschte semantische HEB-Synthese gelang nicht stabil.
+Lief auf dem iPhone grundsätzlich, war fachlich jedoch nicht zuverlässig genug. Die gewünschte semantische HEB-Synthese gelang im damaligen Stand nicht stabil.
 
-Bewertung: **Qwen 3 0.6B wird für die eigentliche HEB-Generierung nicht weiterverwendet.**
+Bewertung: **Qwen 3 0.6B wurde im damaligen Generierungsansatz für die eigentliche HEB-Generierung verworfen.**
 
 ### Qwen 3 1.7B – v10
 
@@ -80,27 +80,37 @@ Der Modelldownload lief auf dem realen iPhone bis 100 %. Direkt beim anschließe
 
 Bewertung: **Qwen 3 1.7B im damaligen WebLLM/PWA-Ansatz ist auf dem getesteten iPhone nicht praktisch einsetzbar.** Dieser Weg wurde beendet.
 
-### Gemma 3 1B – v11, erster realer iPhone-Versuch
+### Gemma 3 1B – v11
 
 Der erste reale iPhone-Versuch mit v11 scheiterte noch vor dem Modelldownload am Browser-Modulimport mit `onnxruntime-web/webgpu does not resolve to a valid URL`. Dieser konkrete Runtime-Buildfehler wurde mit Commit `2b9b297f...` korrigiert und ist in den automatischen Browser-Modulimport-Tests nicht mehr reproduzierbar.
 
-Der reale iPhone-Retest mit dem korrigierten Build steht noch aus.
+Beim anschließenden realen iPhone-Retest mit dem korrigierten Build wird der Modelldownload bis 100 % abgeschlossen. Unmittelbar beim anschließenden Initialisieren erreicht die App jedoch nicht „KI ist bereit“; stattdessen startet der Ladeablauf ohne Nutzereingriff erneut von vorn.
 
-## Noch nicht geprüft – v11
+Der aktuelle App-Code enthält innerhalb eines Seitenlaufs keinen automatischen Modell-Neustart nach 100 %. `generatorPromise` verhindert parallele bzw. doppelte Pipeline-Initialisierungen. Das beobachtete Zurückspringen auf einen frischen Ladeablauf ist daher mit einem Neustart des Safari/PWA-Seitenprozesses vereinbar und entspricht funktional einem fehlgeschlagenen realen Modellstart.
 
-Für Gemma 3 1B / Transformers.js v11 fehlen aktuell noch insbesondere:
+Bewertung: **Gemma 3 1B / q4f16 wird auf dem getesteten Ziel-iPhone nicht als stabil einsetzbar bewertet. Weitere wiederholte Downloads dieses Kandidaten sind nicht sinnvoll.**
 
-- vollständiger Modellstart auf dem realen Ziel-iPhone bis „KI ist bereit“ mit dem korrigierten Build `2b9b297f...`
-- eine vollständige HEB-Generierung mit einem rein synthetischen Fall
-- fachliche Qualität des Ergebnisses einschließlich Grammatik, HEB-Struktur, Ressourcenorientierung und fehlender Erfindungen
+## Nächster technischer Schritt
+
+Für den nächsten Modellkandidaten gelten zwei harte Kriterien gleichzeitig:
+
+1. Er muss auf dem realen iPhone zuverlässig vollständig initialisieren und mehrfach lokal generieren können.
+2. Die HEB-Ausgabe muss mit der aktuellen Evidence-/Sicherheitsarchitektur fachlich ausreichend sein; technisch stabile, aber sprachlich unbrauchbare Ausgabe gilt weiterhin als Fehlschlag.
+
+Vor einem weiteren großen realen iPhone-Download soll der nächste Kandidat soweit möglich anhand Modellgröße, Runtime-Kompatibilität und synthetischer Qualität vorgeprüft werden.
+
+## Weiterhin offen
+
+- Auswahl und Vorprüfung eines kleineren iPhone-tauglichen Modellkandidaten
+- vollständiger Modellstart dieses Kandidaten auf dem realen Ziel-iPhone bis „KI ist bereit“
+- vollständige HEB-Generierungen mit rein synthetischen Fällen
+- fachliche Qualität einschließlich Grammatik, HEB-Struktur, Ressourcenorientierung und fehlender Erfindungen
 - mehrere aufeinanderfolgende Generierungen auf dem realen iPhone
 - Verhalten nach erneutem Öffnen der PWA und Nutzung des lokalen Modell-Caches
 - echter Offline-Test nach einem zuvor vollständig erfolgreichen Modellstart
 - echter Android-WebGPU-Test
 - echter Desktop-WebGPU-Test
 - mehrere synthetische Qualitätstests für HEB A, B und C
-
-Gemma 3 1B ist deshalb aktuell ein **zu prüfender v11-Kandidat**, nicht bereits als iPhone-stabil oder fachlich freigegeben bestätigt.
 
 ## Freigaberegel
 
