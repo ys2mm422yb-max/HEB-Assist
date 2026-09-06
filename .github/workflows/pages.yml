@@ -81,6 +81,12 @@ jobs:
           grep -q "decoder_model_merged: MODEL_DTYPE" ai-engine.js
           grep -q "PREVIOUS_START_INCOMPLETE" ai-engine.js
           grep -q "./vendor/transformers.js" ai-engine.js
+          grep -q "from './ai-engine.js';" app.js
+          grep -q "await import('./ai-engine.js')" bootstrap.js
+          if grep -nE "ai-engine\.js\?build|ai-engine\.js\?" bootstrap.js app.js; then
+            echo "ai-engine.js darf nicht unter mehreren Modul-URLs geladen werden; sonst entstehen getrennte KI-Zustände."
+            exit 1
+          fi
           test -s vendor/transformers.js
           test -s vendor/ort-wasm-simd-threaded.jsep.mjs
           test -s vendor/ort-wasm-simd-threaded.jsep.wasm

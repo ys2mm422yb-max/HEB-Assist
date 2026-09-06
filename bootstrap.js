@@ -54,7 +54,7 @@ function finishReadyUiIfNeeded() {
 
 async function startLocalAiImmediately() {
   if (aiStartupPromise) return aiStartupPromise;
-  aiStartupPromise = (async () => { aiModule = await import(`./ai-engine.js?build=${BUILD_ID}`); const capability = aiModule.getLocalAiCapability?.(); if (!capability?.supported) return; await aiModule.preloadLocalAi(updateEarlyStartupUi); })().catch((error) => { updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error), errorCode: error?.code || null }); throw error; });
+  aiStartupPromise = (async () => { aiModule = await import('./ai-engine.js'); const capability = aiModule.getLocalAiCapability?.(); if (!capability?.supported) return; await aiModule.preloadLocalAi(updateEarlyStartupUi); })().catch((error) => { updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error), errorCode: error?.code || null }); throw error; });
   return aiStartupPromise;
 }
 
