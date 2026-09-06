@@ -1,4 +1,4 @@
-const CACHE_NAME = 'heb-assist-shell-v32';
+const CACHE_NAME = 'heb-assist-shell-v33';
 const APP_SHELL = [
   './',
   './index.html',
@@ -9,7 +9,7 @@ const APP_SHELL = [
   './app.js',
   './ai-engine.js',
   './evidence-pipeline.js',
-  './evidence-router.js',
+  './reasoning-pipeline.js',
   './privacy-filter.js',
   './heb-knowledge.js',
   './manifest.webmanifest',

@@ -13,7 +13,7 @@ on:
       - 'app.js'
       - 'ai-engine.js'
       - 'evidence-pipeline.js'
-      - 'evidence-router.js'
+      - 'reasoning-pipeline.js'
       - 'privacy-filter.js'
       - 'heb-knowledge.js'
       - 'manifest.webmanifest'
@@ -55,15 +55,19 @@ jobs:
           node --check app.js
           node --check ai-engine.js
           node --check evidence-pipeline.js
-          node --check evidence-router.js
+          node --check reasoning-pipeline.js
           node --check privacy-filter.js
           node --check heb-knowledge.js
           node --check sw.js
           node --check tests/evidence-pipeline.test.mjs
+          node --check tests/reasoning-pipeline.test.mjs
           node --check tests/browser/app-shell.spec.mjs
 
       - name: Run synthetic evidence regression tests
         run: node tests/evidence-pipeline.test.mjs
+
+      - name: Run synthetic reasoning-safety regression tests
+        run: node tests/reasoning-pipeline.test.mjs
 
       - name: Install browser test tooling
         run: |
