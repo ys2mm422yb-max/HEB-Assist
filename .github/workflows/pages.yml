@@ -13,7 +13,6 @@ on:
       - 'bootstrap.js'
       - 'app.js'
       - 'ai-engine.js'
-      - 'runtime-entry.js'
       - 'evidence-pipeline.js'
       - 'reasoning-pipeline.js'
       - 'privacy-filter.js'
@@ -54,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Build local WebLLM runtime
+      - name: Prepare local WebLLM runtime
         run: npm run build:runtime
 
       - name: Check JavaScript syntax
@@ -62,7 +61,6 @@ jobs:
           node --check bootstrap.js
           node --check app.js
           node --check ai-engine.js
-          node --check runtime-entry.js
           node --check evidence-pipeline.js
           node --check reasoning-pipeline.js
           node --check privacy-filter.js
@@ -71,6 +69,15 @@ jobs:
           node --check tests/evidence-pipeline.test.mjs
           node --check tests/reasoning-pipeline.test.mjs
           node --check tests/browser/app-shell.spec.mjs
+
+      - name: Check v10 local-runtime architecture
+        run: |
+          grep -q "Qwen3-1.7B-q4f16_1-MLC" ai-engine.js
+          grep -q "./vendor/webllm.js" ai-engine.js
+          if grep -R -nE "esm\.run|cdn\.jsdelivr\.net|unpkg\.com" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
+            echo "Externe JavaScript-CDN in App-Code gefunden."
+            exit 1
+          fi
 
       - name: Run synthetic evidence regression tests
         run: node tests/evidence-pipeline.test.mjs
