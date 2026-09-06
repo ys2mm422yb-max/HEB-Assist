@@ -30,7 +30,7 @@ Bewertung: **Qwen 3 0.6B wird für die eigentliche HEB-Generierung nicht weiterv
 
 ## Neuer Entwicklungsstand: v10
 
-v10 wechselt auf **Qwen 3 1.7B q4f16 über WebLLM 0.2.82**.
+v10 verwendet **Qwen 3 1.7B q4f16 über WebLLM 0.2.82**.
 
 ### Architektur
 
@@ -42,7 +42,7 @@ v10 wechselt auf **Qwen 3 1.7B q4f16 über WebLLM 0.2.82**.
 6. Es gibt **keinen zweiten KI-Reviewer**. Nach dem Modelllauf prüft nur lokale Sicherheitslogik auf klar erkennbare unzulässige Inhalte oder Bedeutungsverschiebungen. Diese Logik erzeugt selbst keinen HEB-Text.
 7. Die Generierung streamt lokal. Die Oberfläche zeigt einen bewegten Aktivitätsbalken, Bearbeitungszeit und die aktuelle Phase, damit laufende Berechnung und Hänger unterscheidbar sind.
 8. Eine Generierung wird nach maximal drei Minuten abgebrochen, wenn sie nicht fertig wird. Es wird kein Ersatztext erzeugt.
-9. Die WebLLM-JavaScript-Laufzeit wird beim Deploy lokal gebündelt und von der PWA gecacht; `esm.run` oder eine andere JavaScript-CDN ist für die Laufzeit nicht mehr vorgesehen.
+9. Die WebLLM-JavaScript-Laufzeit wird beim Deploy lokal aus dem gepinnten npm-Paket bereitgestellt und von der PWA gecacht; `esm.run` oder eine andere JavaScript-CDN ist für die Laufzeit nicht mehr vorgesehen.
 10. Das neue Modell wird beim ersten Start separat geladen und von WebLLM lokal im Browser gespeichert.
 
 ### Erwartung für den bekannten synthetischen HEB-A-Testfall
@@ -58,10 +58,13 @@ Beim Testfall mit verbalem Impuls zur Aufnahme der Körperpflege muss v10 mindes
 
 ## Automatisierte Tests für v10
 
-Der GitHub-Pages-Workflow soll vor dem Deploy prüfen:
+GitHub-Actions-Lauf **#108** für Commit `3f48399a9c7f1ae5ce78abcecafaf793ddfd3823` ist vollständig erfolgreich abgeschlossen.
 
-- npm-Abhängigkeiten und Build der lokal gebündelten WebLLM-Laufzeit
+Bestanden sind:
+
+- npm-Abhängigkeiten und lokale Bereitstellung der WebLLM-Laufzeit
 - JavaScript-Syntax
+- v10-Architekturcheck: Qwen 3 1.7B, lokale Runtime-Datei und keine externe JavaScript-CDN im App-Code
 - bestehende synthetische Quellen-/Sicherheitsregressionen
 - Reasoning-Parser-/Sicherheitsregressionen
 - Browser-Smoke-Tests mit Chromium und WebKit
@@ -71,12 +74,13 @@ Der GitHub-Pages-Workflow soll vor dem Deploy prüfen:
 - Dark Mode
 - Manifest und Service Worker
 - lokale Erreichbarkeit von `vendor/webllm.js`
-- keine externe JavaScript-CDN für die KI-Laufzeit im App-Shell-Test
+
+**GitHub Pages wurde im selben Lauf erfolgreich deployed.**
+
+Diese Tests können weiterhin keine echte iPhone-WebGPU-Inferenz und keine reale Modellqualität ersetzen.
 
 ## Für v10 noch offen
 
-- GitHub-Actions-Lauf der v10-Änderung muss vollständig grün sein.
-- GitHub Pages muss den v10-Stand erfolgreich veröffentlichen.
 - Qwen 3 1.7B muss auf dem realen iPhone vollständig laden und ohne Safari-/Speicherabbruch starten.
 - nach dem Erstdownload muss geprüft werden, ob ein erneuter Start aus dem lokalen Browsercache ohne erneuten vollständigen Modelldownload funktioniert.
 - Offline-Test nach erfolgreichem Erstdownload steht aus.
