@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-q4f16-heb-v12';
+const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
 
 async function openWithoutExternalNetwork(page) {
