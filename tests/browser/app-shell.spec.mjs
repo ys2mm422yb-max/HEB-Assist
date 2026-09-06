@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
+const MODEL_PROFILE = 'webllm-qwen3.5-0.8b-q4f16-heb-v15';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
-const V14_GUARD_MIGRATION_KEY = 'heb-assist-v14-start-guard-migrated';
+const V15_GUARD_MIGRATION_KEY = 'heb-assist-v15-webllm-guard-migrated';
 
 async function openWithoutExternalNetwork(page) {
   await page.route(/^https:\/\//, (route) => route.abort());
@@ -17,6 +17,7 @@ test('HEB-Auswahl und offizielle Bereiche sind vollständig vorhanden', async ({
   await expect(page.locator('#area option').nth(0)).toContainText('Aufnahme und Gestaltung persönlicher, sozialer Beziehungen');
   await expect(page.locator('#area option').nth(4)).toContainText('Umgang mit den Auswirkungen der Behinderung');
   await expect(page.locator('.startup-note')).toContainText('Qwen 3.5 0.8B');
+  await expect(page.locator('.startup-note')).toContainText('WebLLM');
   await expect(page.locator('.startup-note')).not.toContainText('Gemma');
   await expect(page.locator('#notes')).toBeDisabled();
   await expect(page.locator('#generateButton')).toBeDisabled();
@@ -26,22 +27,20 @@ test('PWA-Grunddateien und lokal gebündelte KI-Laufzeit sind erreichbar', async
   await openWithoutExternalNetwork(page);
   const manifest = await request.get('/manifest.webmanifest'); expect(manifest.ok()).toBeTruthy();
   const sw = await request.get('/sw.js'); expect(sw.ok()).toBeTruthy();
-  const runtime = await request.get('/vendor/transformers.js'); expect(runtime.ok()).toBeTruthy(); expect((await runtime.text()).length).toBeGreaterThan(100000);
-  const wasmLoader = await request.get('/vendor/ort-wasm-simd-threaded.jsep.mjs'); expect(wasmLoader.ok()).toBeTruthy();
-  const wasm = await request.get('/vendor/ort-wasm-simd-threaded.jsep.wasm'); expect(wasm.ok()).toBeTruthy();
+  const runtime = await request.get('/vendor/webllm.js'); expect(runtime.ok()).toBeTruthy(); expect((await runtime.text()).length).toBeGreaterThan(100000);
   const generationCss = await request.get('/generation-progress.css'); expect(generationCss.ok()).toBeTruthy();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth); expect(overflow).toBeLessThanOrEqual(2);
 });
 
-test('lokale Transformers.js-Runtime enthält Qwen-3.5-Textsupport und lädt ohne npm-Auflösungsfehler', async ({ page }) => {
+test('lokale WebLLM-Runtime enthält Qwen 3.5 0.8B und lädt ohne npm-Auflösungsfehler', async ({ page }) => {
   await page.route(/^https:\/\//, (route) => route.abort());
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   const result = await page.evaluate(async () => {
     try {
-      const runtime = await import('/vendor/transformers.js?browser-import-test=3');
+      const runtime = await import('/vendor/webllm.js?browser-import-test=15');
       return {
-        ok: typeof runtime.pipeline === 'function',
-        qwenText: typeof runtime.Qwen3_5ForCausalLM === 'function',
+        ok: typeof runtime.CreateMLCEngine === 'function',
+        qwenText: Boolean(runtime.prebuiltAppConfig?.model_list?.some((entry) => entry.model_id === 'Qwen3.5-0.8B-q4f16_1-MLC')),
         error: '',
       };
     } catch (error) {
@@ -49,16 +48,16 @@ test('lokale Transformers.js-Runtime enthält Qwen-3.5-Textsupport und lädt ohn
     }
   });
   expect(result.ok, result.error).toBeTruthy();
-  expect(result.qwenText, 'Transformers.js 4.2.0 exportiert Qwen3_5ForCausalLM nicht').toBeTruthy();
+  expect(result.qwenText, 'WebLLM 0.2.84 enthält Qwen3.5-0.8B-q4f16_1-MLC nicht').toBeTruthy();
   expect(result.error).not.toMatch(/does not resolve to a valid URL|Failed to resolve module specifier|onnxruntime-(?:web|common|node)/i);
 });
 
-test('Crash-Loop-Schutz verhindert nach der v14-Migration einen automatischen zweiten Großdownload', async ({ page }) => {
+test('Crash-Loop-Schutz verhindert nach der v15-Migration einen automatischen zweiten Großdownload', async ({ page }) => {
   await page.addInitScript(({ guardKey, migrationKey, profile }) => {
     try { Object.defineProperty(navigator, 'gpu', { value: {}, configurable: true }); } catch {}
     localStorage.setItem(migrationKey, '1');
     localStorage.setItem(guardKey, JSON.stringify({ profile, startedAt: Date.now() }));
-  }, { guardKey: START_GUARD_KEY, migrationKey: V14_GUARD_MIGRATION_KEY, profile: MODEL_PROFILE });
+  }, { guardKey: START_GUARD_KEY, migrationKey: V15_GUARD_MIGRATION_KEY, profile: MODEL_PROFILE });
   await page.route(/^https:\/\//, (route) => route.abort());
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#startupTitle')).toHaveText('Automatischer KI-Neustart gestoppt');

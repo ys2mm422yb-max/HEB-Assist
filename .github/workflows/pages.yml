@@ -54,7 +54,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Prepare local Transformers.js runtime
+      - name: Prepare local WebLLM runtime
         run: npm run build:runtime
 
       - name: Check JavaScript syntax
@@ -72,37 +72,32 @@ jobs:
           node --check tests/reasoning-pipeline.test.mjs
           node --check tests/browser/app-shell.spec.mjs
 
-      - name: Check v13 text-only local-runtime architecture
+      - name: Check v15 WebLLM local-runtime architecture
         run: |
-          grep -q "onnx-community/Qwen3.5-0.8B-Text-ONNX" ai-engine.js
-          grep -q "1e45daba048899e7f771657ada617ec49350aa91" ai-engine.js
-          grep -q "pipeline('text-generation'" ai-engine.js
-          grep -q "dtype: modelDtype" ai-engine.js
-          grep -q "shader-f16" ai-engine.js
-          grep -q "progress_total" ai-engine.js
+          grep -q "\"@mlc-ai/web-llm\": \"0.2.84\"" package.json
+          grep -q "Qwen3.5-0.8B-q4f16_1-MLC" ai-engine.js
+          grep -q "CreateMLCEngine" ai-engine.js
+          grep -q "chat.completions.create" ai-engine.js
+          grep -q "stream: true" ai-engine.js
+          grep -q "cacheBackend: 'cache'" ai-engine.js
+          grep -q "MODEL_CONTEXT_WINDOW = 3072" ai-engine.js
           grep -q "PREVIOUS_START_INCOMPLETE" ai-engine.js
           grep -q "QUALITY_REJECTED" ai-engine.js
-          grep -q "./vendor/transformers.js" ai-engine.js
-          grep -q "qwen3_5_text" vendor/transformers.js
+          grep -q "./vendor/webllm.js" ai-engine.js
+          grep -q "Qwen3.5-0.8B-q4f16_1-MLC" vendor/webllm.js
           grep -q "from './ai-engine.js';" app.js
           grep -q "await import('./ai-engine.js')" bootstrap.js
           if grep -nE "ai-engine\.js\?build|ai-engine\.js\?" bootstrap.js app.js; then
             echo "ai-engine.js darf nicht unter mehreren Modul-URLs geladen werden; sonst entstehen getrennte KI-Zustände."
             exit 1
           fi
-          test -s vendor/transformers.js
-          test -s vendor/ort-wasm-simd-threaded.jsep.mjs
-          test -s vendor/ort-wasm-simd-threaded.jsep.wasm
+          test -s vendor/webllm.js
+          if grep -R -nE "@huggingface/transformers|onnxruntime-web|vendor/transformers\.js|ort-wasm-simd-threaded" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
+            echo "Alte Transformers.js-/ONNX-WebGPU-Laufzeit im App-Code gefunden."
+            exit 1
+          fi
           if grep -R -nE "esm\.run|cdn\.jsdelivr\.net|unpkg\.com" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
             echo "Externe JavaScript-CDN in App-Code gefunden."
-            exit 1
-          fi
-          if grep -R -n "onnx-community/Qwen3.5-0.8B-ONNX'" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
-            echo "Multimodales Qwen-3.5-ONNX-Modell darf nicht mehr als Text-Pipeline verwendet werden."
-            exit 1
-          fi
-          if grep -R -n "gemma-3-1b-it-ONNX" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
-            echo "Nicht mehr zulässiges Gemma-3-1B-Modell im App-Code gefunden."
             exit 1
           fi
           if grep -R -n "Qwen3-1.7B-q4f16_1-MLC" --include='*.js' --include='*.html' . --exclude-dir=node_modules --exclude-dir=vendor; then
@@ -132,9 +127,7 @@ jobs:
           cp index.html styles.css dark-mode.css mobile-fixes.css generation-progress.css _site/
           cp bootstrap.js app.js ai-engine.js evidence-pipeline.js reasoning-pipeline.js privacy-filter.js heb-knowledge.js _site/
           cp manifest.webmanifest icon.svg sw.js _site/
-          cp vendor/transformers.js _site/vendor/
-          cp vendor/ort-wasm-simd-threaded.jsep.mjs _site/vendor/
-          cp vendor/ort-wasm-simd-threaded.jsep.wasm _site/vendor/
+          cp vendor/webllm.js _site/vendor/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

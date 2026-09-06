@@ -1,55 +1,29 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-const transformersSource = 'node_modules/@huggingface/transformers/dist/transformers.js';
-const ortDir = 'node_modules/onnxruntime-web/dist';
+const runtimeSource = 'node_modules/@mlc-ai/web-llm/lib/index.js';
 const vendorDir = 'vendor';
-const requiredSources = [
-  transformersSource,
-  `${ortDir}/ort-wasm-simd-threaded.jsep.mjs`,
-  `${ortDir}/ort-wasm-simd-threaded.jsep.wasm`,
-];
-const upstreamFixMarker = 'HEB Assist runtime patch: huggingface/transformers.js#1664@f7487c737aa8cafbc106c9adf69dc9578c8f3fe0';
+const runtimeTarget = `${vendorDir}/webllm.js`;
+const runtimeMarker = 'HEB Assist local WebLLM runtime 0.2.84';
 
-for (const source of requiredSources) {
-  if (!existsSync(source)) throw new Error(`Benötigte Runtime-Datei fehlt: ${source}`);
+if (!existsSync(runtimeSource)) {
+  throw new Error(`Benötigte WebLLM-Runtime fehlt: ${runtimeSource}`);
 }
 
 mkdirSync(vendorDir, { recursive: true });
-let runtime = readFileSync(transformersSource, 'utf8');
+let runtime = readFileSync(runtimeSource, 'utf8');
 
-// Transformers.js 4.2.0 has a confirmed upstream bug (#1663): when a
-// progress_callback is active, get_file_metadata() can use different memoize
-// keys for omitted vs. explicit default options and fetch model files more than
-// once. Upstream fixed this in PR #1664. Until a newer npm release contains the
-// fix, apply that exact normalization to the locally bundled runtime.
-const buggyMemoKeyPattern = /([A-Za-z_$][\w$]*)\?\.revision,\s*\1\?\.cache_dir,\s*\1\?\.local_files_only(?=\s*\])/g;
-const buggyMemoKeyMatches = [...runtime.matchAll(buggyMemoKeyPattern)];
-if (buggyMemoKeyMatches.length !== 1) {
-  throw new Error(`Transformers.js-4.2.0-Patch abgebrochen: erwartete Memoize-Stelle ${buggyMemoKeyMatches.length}× gefunden statt genau 1×.`);
+if (!runtime.includes('Qwen3.5-0.8B-q4f16_1-MLC')) {
+  throw new Error('WebLLM 0.2.84 enthält das benötigte Qwen-3.5-0.8B-Modellprofil nicht.');
 }
-runtime = runtime.replace(buggyMemoKeyPattern, (_match, variable) => [
-  `${variable}?.revision ?? 'main',`,
-  `${variable}?.cache_dir ?? null,`,
-  `${variable}?.local_files_only ?? false`,
-].join('\n'));
-runtime = `/* ${upstreamFixMarker} */\n${runtime}`;
-
-const forbiddenBareImport = /(?:from\s*|import\s*\()\s*['"](?:onnxruntime-common|onnxruntime-web(?:\/webgpu)?|onnxruntime-node)['"]/;
-if (forbiddenBareImport.test(runtime)) {
-  throw new Error('Die Browser-Runtime enthält weiterhin einen nicht aufgelösten ONNX-npm-Import.');
-}
-if (!runtime.includes(upstreamFixMarker)) {
-  throw new Error('Der bestätigte Transformers.js-Doppel-Download-Fix wurde nicht in die Browser-Runtime übernommen.');
-}
-if (buggyMemoKeyPattern.test(runtime)) {
-  throw new Error('Die ungepatchte Memoize-Stelle ist nach dem Runtime-Build weiterhin vorhanden.');
+if (!runtime.includes('CreateMLCEngine')) {
+  throw new Error('WebLLM-Browser-Runtime exportiert CreateMLCEngine nicht wie erwartet.');
 }
 if (runtime.length < 100000) {
-  throw new Error('Die gebündelte Transformers.js-Browser-Runtime ist unerwartet klein.');
+  throw new Error('Die gebündelte WebLLM-Browser-Runtime ist unerwartet klein.');
 }
 
-writeFileSync(`${vendorDir}/transformers.js`, runtime);
-cpSync(`${ortDir}/ort-wasm-simd-threaded.jsep.mjs`, `${vendorDir}/ort-wasm-simd-threaded.jsep.mjs`);
-cpSync(`${ortDir}/ort-wasm-simd-threaded.jsep.wasm`, `${vendorDir}/ort-wasm-simd-threaded.jsep.wasm`);
+runtime = runtime.replace(/\n?\/\/# sourceMappingURL=.*$/m, '');
+runtime = `/* ${runtimeMarker} */\n${runtime}`;
+writeFileSync(runtimeTarget, runtime);
 
-console.log('Transformers.js-Browser-Runtime mit bestätigtem Upstream-Fix #1664 vorbereitet.');
+console.log('WebLLM-0.2.84-Browser-Runtime für Qwen 3.5 0.8B lokal vorbereitet.');

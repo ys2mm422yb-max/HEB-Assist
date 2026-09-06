@@ -1,23 +1,26 @@
-const BUILD_ID = '2026-09-06-v14';
+const BUILD_ID = '2026-09-06-v15';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
-const V13_MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
-const V14_GUARD_MIGRATION_KEY = 'heb-assist-v14-start-guard-migrated';
+const LEGACY_TRANSFORMERS_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
+const V15_MODEL_PROFILE = 'webllm-qwen3.5-0.8b-q4f16-heb-v15';
+const V15_GUARD_MIGRATION_KEY = 'heb-assist-v15-webllm-guard-migrated';
 
-function migrateIncompleteV13StartGuard() {
+function migrateLegacyStartGuard() {
   try {
-    if (localStorage.getItem(V14_GUARD_MIGRATION_KEY) === '1') return;
+    if (localStorage.getItem(V15_GUARD_MIGRATION_KEY) === '1') return;
     const raw = localStorage.getItem(START_GUARD_KEY);
     if (raw) {
       const guard = JSON.parse(raw);
-      if (guard?.profile === V13_MODEL_PROFILE) localStorage.removeItem(START_GUARD_KEY);
+      if (guard?.profile === LEGACY_TRANSFORMERS_PROFILE || (guard?.profile && guard.profile !== V15_MODEL_PROFILE)) {
+        localStorage.removeItem(START_GUARD_KEY);
+      }
     }
-    localStorage.setItem(V14_GUARD_MIGRATION_KEY, '1');
+    localStorage.setItem(V15_GUARD_MIGRATION_KEY, '1');
   } catch {
-    // Best-effort migration only; no fall text or HEB output is stored here.
+    // Best-effort migration only; kein Falltext und keine HEB-Ausgabe werden hier gespeichert.
   }
 }
 
-migrateIncompleteV13StartGuard();
+migrateLegacyStartGuard();
 
 let serviceWorkerRegistration = null;
 let aiModule = null;
@@ -51,29 +54,68 @@ function updateEarlyStartupUi(status = {}) {
     ui.percent.textContent = '—';
     ui.stage.textContent = restartBlocked ? 'Erneuter Download gestoppt' : 'Start fehlgeschlagen';
     ui.track.hidden = true;
-    if (ui.error && ui.errorText) { ui.error.hidden = false; ui.errorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.'; }
+    if (ui.error && ui.errorText) {
+      ui.error.hidden = false;
+      ui.errorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.';
+    }
     return;
   }
   if (status.status === 'ready') {
-    ui.bar.style.width = '100%'; ui.track.setAttribute('aria-valuenow', '100'); ui.percent.textContent = '100 %'; ui.stage.textContent = 'KI ist bereit'; ui.title.textContent = 'Lokale KI ist bereit'; ui.text.textContent = 'HEB Assist kann jetzt verwendet werden.'; return;
+    ui.bar.style.width = '100%';
+    ui.track.setAttribute('aria-valuenow', '100');
+    ui.percent.textContent = '100 %';
+    ui.stage.textContent = 'KI ist bereit';
+    ui.title.textContent = 'Lokale KI ist bereit';
+    ui.text.textContent = 'HEB Assist kann jetzt verwendet werden.';
+    return;
   }
   if (status.status === 'loading') {
-    ui.bar.style.width = `${Math.max(3, percent)}%`; ui.track.setAttribute('aria-valuenow', String(percent)); ui.percent.textContent = `${percent} %`; ui.stage.textContent = status.text || 'Sprachmodell wird vorbereitet …'; ui.title.textContent = percent >= 99 ? 'Lokale KI wird gestartet' : 'Lokale KI wird geladen'; ui.text.textContent = percent >= 99 ? 'Die Modelldateien sind geladen. Das Sprachmodell wird jetzt auf diesem Gerät initialisiert.' : 'Das Sprachmodell wird direkt auf diesem Gerät vorbereitet.';
+    ui.bar.style.width = `${Math.max(3, percent)}%`;
+    ui.track.setAttribute('aria-valuenow', String(percent));
+    ui.percent.textContent = `${percent} %`;
+    ui.stage.textContent = status.text || 'Sprachmodell wird vorbereitet …';
+    ui.title.textContent = percent >= 99 ? 'Lokale KI wird gestartet' : 'Lokale KI wird geladen';
+    ui.text.textContent = percent >= 99
+      ? 'Die Modelldateien sind geladen. Das Sprachmodell wird jetzt auf diesem Gerät initialisiert.'
+      : 'Das Sprachmodell wird direkt auf diesem Gerät vorbereitet.';
   }
 }
 
 function finishReadyUiIfNeeded() {
   if (!aiModule?.isLocalAiReady?.()) return;
-  const gate = document.querySelector('#startupGate'); const appShell = document.querySelector('#appShell'); const notes = document.querySelector('#notes'); const generateButton = document.querySelector('#generateButton'); const clearButton = document.querySelector('#clearButton'); const engineBadge = document.querySelector('#engineBadge'); const engineProgressTrack = document.querySelector('#engineProgressTrack');
-  gate?.classList.add('startup-gate-hidden'); gate?.setAttribute('aria-hidden', 'true'); gate?.setAttribute('aria-busy', 'false'); appShell?.removeAttribute('inert'); appShell?.removeAttribute('aria-hidden'); document.body.classList.remove('startup-locked');
-  if (notes) notes.disabled = false; if (generateButton) generateButton.disabled = false; if (clearButton) clearButton.disabled = false;
-  if (engineBadge) { engineBadge.textContent = 'KI ist bereit ✓'; engineBadge.classList.remove('loading', 'warning'); engineBadge.classList.add('ready'); }
+  const gate = document.querySelector('#startupGate');
+  const appShell = document.querySelector('#appShell');
+  const notes = document.querySelector('#notes');
+  const generateButton = document.querySelector('#generateButton');
+  const clearButton = document.querySelector('#clearButton');
+  const engineBadge = document.querySelector('#engineBadge');
+  const engineProgressTrack = document.querySelector('#engineProgressTrack');
+  gate?.classList.add('startup-gate-hidden');
+  gate?.setAttribute('aria-hidden', 'true');
+  gate?.setAttribute('aria-busy', 'false');
+  appShell?.removeAttribute('inert');
+  appShell?.removeAttribute('aria-hidden');
+  document.body.classList.remove('startup-locked');
+  if (notes) notes.disabled = false;
+  if (generateButton) generateButton.disabled = false;
+  if (clearButton) clearButton.disabled = false;
+  if (engineBadge) {
+    engineBadge.textContent = 'KI ist bereit ✓';
+    engineBadge.classList.remove('loading', 'warning');
+    engineBadge.classList.add('ready');
+  }
   if (engineProgressTrack) engineProgressTrack.hidden = true;
 }
 
 async function startLocalAiImmediately() {
   if (aiStartupPromise) return aiStartupPromise;
-  aiStartupPromise = (async () => { aiModule = await import('./ai-engine.js'); const capability = aiModule.getLocalAiCapability?.(); if (!capability?.supported) return; await aiModule.preloadLocalAi(updateEarlyStartupUi); })().catch((error) => { updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error), errorCode: error?.code || null }); throw error; });
+  aiStartupPromise = (async () => {
+    aiModule = await import('./ai-engine.js');
+    await aiModule.preloadLocalAi(updateEarlyStartupUi);
+  })().catch((error) => {
+    updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error), errorCode: error?.code || null });
+    throw error;
+  });
   return aiStartupPromise;
 }
 
@@ -85,18 +127,41 @@ function waitForInitialPageLoad() {
 async function startApp() {
   const aiPromise = startLocalAiImmediately();
   await waitForInitialPageLoad();
-  try { await import(`./app.js?build=${BUILD_ID}`); finishReadyUiIfNeeded(); } catch (error) { console.error('HEB Assist app start failed:', error?.message || error); }
-  try { await aiPromise; finishReadyUiIfNeeded(); } catch { /* sichtbarer Ladebildschirm enthält den Fehler */ }
+  try {
+    await import(`./app.js?build=${BUILD_ID}`);
+    finishReadyUiIfNeeded();
+  } catch (error) {
+    console.error('HEB Assist app start failed:', error?.message || error);
+  }
+  try {
+    await aiPromise;
+    finishReadyUiIfNeeded();
+  } catch {
+    // Sichtbarer Ladebildschirm enthält den technischen Startfehler.
+  }
 }
 
 async function checkForAppUpdate() {
   if (!serviceWorkerRegistration || !navigator.onLine) return;
-  try { await serviceWorkerRegistration.update(); if (serviceWorkerRegistration.waiting && navigator.serviceWorker.controller) serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (error) { console.warn('Automatische Update-Prüfung fehlgeschlagen:', error?.message || error); }
+  try {
+    await serviceWorkerRegistration.update();
+    if (serviceWorkerRegistration.waiting && navigator.serviceWorker.controller) {
+      serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+  } catch (error) {
+    console.warn('Automatische Update-Prüfung fehlgeschlagen:', error?.message || error);
+  }
 }
 
 async function prepareServiceWorkerAfterAiStart() {
   if (!('serviceWorker' in navigator)) return;
-  try { await aiStartupPromise?.catch(() => undefined); serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }); await checkForAppUpdate(); } catch (error) { console.warn('Service Worker konnte nicht vorbereitet werden:', error?.message || error); }
+  try {
+    await aiStartupPromise?.catch(() => undefined);
+    serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+    await checkForAppUpdate();
+  } catch (error) {
+    console.warn('Service Worker konnte nicht vorbereitet werden:', error?.message || error);
+  }
 }
 
 void startApp().finally(() => { void prepareServiceWorkerAfterAiStart(); });

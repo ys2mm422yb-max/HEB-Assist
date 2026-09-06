@@ -1,4 +1,4 @@
-import { pipeline, env, TextStreamer } from './vendor/transformers.js';
+import { CreateMLCEngine, prebuiltAppConfig, hasModelInCache } from './vendor/webllm.js';
 import { HEB_FORM_CONFIG } from './heb-knowledge.js';
 import { splitEvidenceUnits, evidenceCatalog } from './evidence-pipeline.js';
 import {
@@ -8,10 +8,10 @@ import {
   validateReasonedSection,
 } from './reasoning-pipeline.js';
 
-const MODEL_ID = 'onnx-community/Qwen3.5-0.8B-Text-ONNX';
-const MODEL_REVISION = '1e45daba048899e7f771657ada617ec49350aa91';
-const MODEL_LABEL = 'Qwen 3.5 0.8B Text';
-const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
+const MODEL_ID = 'Qwen3.5-0.8B-q4f16_1-MLC';
+const MODEL_LABEL = 'Qwen 3.5 0.8B';
+const MODEL_PROFILE = 'webllm-qwen3.5-0.8b-q4f16-heb-v15';
+const MODEL_CONTEXT_WINDOW = 3072;
 const MAX_NEW_TOKENS = 620;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
@@ -66,30 +66,37 @@ TEXT:fachlicher Text
 </SECTION_A>
 Danach SECTION_B usw. bis zum letzten Unterpunkt. EVIDENCE darf nur IDs aus den Originalaussagen enthalten.`;
 
+function createWebLlmAppConfig() {
+  const selected = prebuiltAppConfig.model_list?.find((entry) => entry.model_id === MODEL_ID);
+  if (!selected) {
+    throw new Error(`WebLLM enthält das benötigte Modell ${MODEL_ID} nicht.`);
+  }
+
+  return {
+    ...prebuiltAppConfig,
+    cacheBackend: 'cache',
+    model_list: [{
+      ...selected,
+      overrides: {
+        ...(selected.overrides || {}),
+        context_window_size: MODEL_CONTEXT_WINDOW,
+        max_history_size: 1,
+      },
+    }],
+  };
+}
+
+const WEBLLM_APP_CONFIG = createWebLlmAppConfig();
+
 let generatorPromise = null;
 let generatorInstance = null;
 let modelInfo = null;
-let modelDtype = null;
 let modelState = { status: 'idle', percent: 0, text: 'KI wird vorbereitet …', error: null, errorCode: null };
 
 function setModelState(next, onProgress) {
   modelState = { ...modelState, ...next };
   onProgress?.({ ...modelState });
 }
-
-function configureRuntime() {
-  env.allowRemoteModels = true;
-  env.allowLocalModels = false;
-  env.useBrowserCache = true;
-  if ('useWasmCache' in env) env.useWasmCache = true;
-  try {
-    env.backends.onnx.wasm.wasmPaths = new URL('./vendor/', window.location.href).href;
-  } catch {
-    // Browser-only runtime; a missing override is handled by model initialization.
-  }
-}
-
-configureRuntime();
 
 function readStartGuard() {
   try {
@@ -136,7 +143,7 @@ export function getLocalAiCapability() {
     supported: hasWebGPU,
     modelProfile: MODEL_PROFILE,
     modelLabel: MODEL_LABEL,
-    runtime: 'transformersjs-local-bundle',
+    runtime: 'webllm-local-bundle',
     label: hasWebGPU ? 'Lokale KI verfügbar' : 'Lokale KI nicht verfügbar',
   };
 }
@@ -149,49 +156,54 @@ export function isLocalAiReady() {
   return Boolean(generatorInstance);
 }
 
-function formatBytes(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '';
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${Math.round(mb)} MB`;
-}
+function mapLoadProgress(report, onProgress) {
+  const rawProgress = Number(report?.progress);
+  let percent = Number.isFinite(modelState.percent) ? modelState.percent : 3;
 
-function mapLoadProgress(info, onProgress) {
-  let percent = Number.isFinite(modelState.percent) ? modelState.percent : 2;
+  if (Number.isFinite(rawProgress)) {
+    if (rawProgress >= 1) {
+      percent = 99;
+    } else {
+      percent = Math.max(percent, Math.max(3, Math.min(96, Math.floor(rawProgress * 96))));
+    }
+  }
+
   let text = 'Sprachmodell wird heruntergeladen und lokal gespeichert …';
+  const rawText = String(report?.text || '').toLowerCase();
 
-  if (info?.status === 'progress_total' && Number.isFinite(info.progress)) {
-    percent = Math.max(2, Math.min(98, Math.round(info.progress)));
-    const loaded = formatBytes(info.loaded);
-    const total = formatBytes(info.total);
-    const amount = loaded && total ? ` · ${loaded} von ${total}` : '';
-    text = `Gesamtdownload ${Math.round(info.progress)} %${amount}`;
-  } else if (info?.status === 'progress' && Number.isFinite(info.progress)) {
-    const filename = String(info.file || '').split('/').at(-1) || 'Modelldatei';
-    const loaded = formatBytes(info.loaded);
-    const total = formatBytes(info.total);
-    const amount = loaded && total ? ` · ${loaded} von ${total}` : '';
-    text = `${filename} wird geladen · ${Math.round(info.progress)} %${amount}`;
-  } else if (info?.status === 'download' || info?.status === 'initiate') {
-    text = 'Modelldateien werden vorbereitet …';
-  } else if (info?.status === 'done') {
-    text = 'Eine Modelldatei ist vollständig geladen …';
-  } else if (info?.status === 'ready') {
-    percent = 99;
+  if (/cache|cached|storage/.test(rawText)) {
+    text = 'Lokaler Modell-Cache wird geprüft und vorbereitet …';
+  } else if (percent >= 99) {
     text = 'Modelldateien sind geladen. KI wird initialisiert …';
+  } else if (percent >= 90) {
+    text = 'Sprachmodell wird fertig geladen und vorbereitet …';
+  } else if (percent <= 5) {
+    text = 'WebLLM-Laufzeit und Modell werden vorbereitet …';
   }
 
   setModelState({ status: 'loading', percent, text, error: null, errorCode: null }, onProgress);
 }
 
-async function resolveModelDtype() {
-  try {
-    const adapter = await navigator.gpu?.requestAdapter?.();
-    if (adapter?.features?.has?.('shader-f16')) return 'q4f16';
-  } catch {
-    // q4 works without shader-f16 and is the compatibility fallback.
+function normalizeStartupError(error) {
+  const raw = String(error?.message || error || 'Unbekannter technischer Fehler.');
+  const lowered = raw.toLowerCase();
+  let code = error?.code || 'WEBLLM_INIT_FAILED';
+  let message = raw;
+
+  if (/webgpu|gpu adapter|navigator\.gpu|gpu device/.test(lowered)) {
+    code = 'WEBGPU_INIT_FAILED';
+    message = `WebGPU konnte auf diesem Gerät nicht gestartet werden. Technisches Detail: ${raw}`;
+  } else if (/out of memory|memory|allocation|allocate|buffer.*size|device lost/.test(lowered)) {
+    code = 'MODEL_MEMORY_FAILED';
+    message = `Das lokale Sprachmodell konnte wegen eines Speicher-/GPU-Fehlers nicht initialisiert werden. Technisches Detail: ${raw}`;
+  } else if (/failed to fetch|network|fetch|load failed|loading.*failed/.test(lowered)) {
+    code = 'MODEL_DOWNLOAD_FAILED';
+    message = `Die Modelldateien konnten nicht vollständig geladen werden. Technisches Detail: ${raw}`;
   }
-  return 'q4';
+
+  const wrapped = new Error(message);
+  wrapped.code = code;
+  return wrapped;
 }
 
 async function loadGenerator(onProgress, { force = false } = {}) {
@@ -210,7 +222,7 @@ async function loadGenerator(onProgress, { force = false } = {}) {
   if (!generatorPromise) {
     if (force) clearStartGuard();
     if (!force && hasRecentIncompleteStart()) {
-      const error = new Error('Der vorherige Modellstart wurde nicht sauber abgeschlossen. Ein automatischer erneuter Download wurde gestoppt. Starte die KI nur über „KI erneut starten“, wenn du bewusst einen neuen Versuch auslösen möchtest.');
+      const error = new Error('Der vorherige Modellstart wurde nicht sauber abgeschlossen. Ein automatischer erneuter Großdownload wurde gestoppt. Starte die KI nur über „KI erneut starten“, wenn du bewusst einen neuen Versuch auslösen möchtest.');
       error.code = 'PREVIOUS_START_INCOMPLETE';
       setModelState({ status: 'error', percent: 0, text: 'Automatischer Neustart gestoppt', error: error.message, errorCode: error.code }, onProgress);
       throw error;
@@ -218,38 +230,48 @@ async function loadGenerator(onProgress, { force = false } = {}) {
 
     markStartGuard();
     generatorPromise = (async () => {
-      setModelState({ status: 'loading', percent: 2, text: 'Lokale KI-Laufzeit wird vom Gerät geladen …', error: null, errorCode: null }, onProgress);
+      setModelState({ status: 'loading', percent: 2, text: 'Lokale WebLLM-Laufzeit wird vom Gerät geladen …', error: null, errorCode: null }, onProgress);
       try { await navigator.storage?.persist?.(); } catch { /* optional */ }
 
-      modelDtype = await resolveModelDtype();
+      let cachedBeforeStart = false;
+      try {
+        cachedBeforeStart = await hasModelInCache(MODEL_ID, WEBLLM_APP_CONFIG);
+      } catch {
+        // Cache-Erkennung ist optional. WebLLM prüft seinen Cache beim Start selbst.
+      }
+
       setModelState({
         status: 'loading',
         percent: 3,
-        text: modelDtype === 'q4f16'
-          ? 'Textmodell wird für dieses Gerät vorbereitet …'
-          : 'Kompatibler Textmodell-Modus wird vorbereitet …',
+        text: cachedBeforeStart
+          ? 'Gespeichertes Sprachmodell wird aus dem Geräte-Cache vorbereitet …'
+          : 'Qwen 3.5 0.8B wird geladen und lokal gespeichert …',
         error: null,
         errorCode: null,
       }, onProgress);
 
-      const generator = await pipeline('text-generation', MODEL_ID, {
-        revision: MODEL_REVISION,
-        device: 'webgpu',
-        dtype: modelDtype,
-        progress_callback: (info) => mapLoadProgress(info, onProgress),
-      });
+      let generator;
+      try {
+        generator = await CreateMLCEngine(MODEL_ID, {
+          appConfig: WEBLLM_APP_CONFIG,
+          initProgressCallback: (report) => mapLoadProgress(report, onProgress),
+        });
+      } catch (error) {
+        throw normalizeStartupError(error);
+      }
 
       generatorInstance = generator;
       modelInfo = {
         id: MODEL_ID,
         label: MODEL_LABEL,
         profile: MODEL_PROFILE,
-        revision: MODEL_REVISION,
-        dtype: modelDtype,
+        revision: null,
+        dtype: 'q4f16_1',
         device: 'webgpu',
-        runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
-        persistentCache: 'Browser-Cache',
-        pipeline: 'Qwen 3.5 0.8B Text-only → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
+        runtimeLabel: 'WebLLM 0.2.84 · WebGPU · lokal gebündelt',
+        persistentCache: 'WebLLM Cache API',
+        contextWindow: MODEL_CONTEXT_WINDOW,
+        pipeline: 'Qwen 3.5 0.8B MLC → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
       };
 
       clearStartGuard();
@@ -258,7 +280,6 @@ async function loadGenerator(onProgress, { force = false } = {}) {
     })().catch((error) => {
       generatorPromise = null;
       generatorInstance = null;
-      modelDtype = null;
       clearStartGuard();
       const message = error?.message || String(error);
       setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: message, errorCode: error?.code || null }, onProgress);
@@ -283,16 +304,6 @@ function sectionInstruction(formType) {
 function buildPrompt({ formType, area, catalog }) {
   const form = HEB_FORM_CONFIG[formType] || HEB_FORM_CONFIG.A;
   return `${CORE_RULES}\n\nHEB-Bogen: ${form.label}\nHEB-Bereich: ${area}\n\nOffizielle Unterpunkte:\n${sectionInstruction(formType)}\n\nOriginalaussagen:\n${catalog}\n\nAufgabe:\nErstelle einen fachlich zusammenhängenden, knappen HEB-Entwurf. Ordne die Inhalte selbst semantisch den Unterpunkten zu. Jeder nicht fehlende Unterpunkt muss in EVIDENCE ausschließlich die Original-IDs nennen, die seinen Text tatsächlich tragen.\n\n${FORMAT_INSTRUCTION}`;
-}
-
-function extractAssistantText(output, streamedText) {
-  const generated = output?.[0]?.generated_text;
-  if (Array.isArray(generated)) {
-    const last = generated.at(-1);
-    if (last?.content) return String(last.content).trim();
-  }
-  if (typeof generated === 'string') return generated.trim();
-  return String(streamedText || '').trim();
 }
 
 function makeFinalText(formType, parsed) {
@@ -334,6 +345,7 @@ function validateParsedOutput(parsed, units, formType) {
 async function runGeneration(generator, messages, onProgress) {
   let streamedText = '';
   let generatedChars = 0;
+  let completionTokens = 0;
   let chunkCount = 0;
 
   setModelState({
@@ -347,36 +359,42 @@ async function runGeneration(generator, messages, onProgress) {
     errorCode: null,
   }, onProgress);
 
-  const streamer = new TextStreamer(generator.tokenizer, {
-    skip_prompt: true,
-    skip_special_tokens: true,
-    callback_function: (text) => {
-      const piece = String(text || '');
-      if (!piece) return;
+  await generator.resetChat();
+
+  const stream = await generator.chat.completions.create({
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    max_tokens: MAX_NEW_TOKENS,
+    temperature: 0,
+  });
+
+  for await (const chunk of stream) {
+    const piece = String(chunk?.choices?.[0]?.delta?.content || '');
+    if (piece) {
       streamedText += piece;
       generatedChars += piece.length;
       chunkCount += 1;
+    }
+    if (Number.isFinite(chunk?.usage?.completion_tokens)) {
+      completionTokens = chunk.usage.completion_tokens;
+    }
+    if (piece || completionTokens) {
       setModelState({
         status: 'generating',
         percent: 0,
         phase: 'writing',
         text: chunkCount < 3 ? 'KI ordnet die HEB-Unterpunkte zu …' : 'KI formuliert den HEB-Entwurf …',
         generatedChars,
-        completionTokens: 0,
+        completionTokens,
         error: null,
         errorCode: null,
       }, onProgress);
-    },
-  });
+    }
+  }
 
-  const output = await generator(messages, {
-    max_new_tokens: MAX_NEW_TOKENS,
-    do_sample: false,
-    repetition_penalty: 1.05,
-    streamer,
-  });
-
-  return extractAssistantText(output, streamedText);
+  const finalMessage = String(await generator.getMessage() || '').trim();
+  return finalMessage || streamedText.trim();
 }
 
 export async function generateHebText({ notes, area, formType = 'A', mode = 'complete', onProgress } = {}) {
@@ -394,6 +412,7 @@ export async function generateHebText({ notes, area, formType = 'A', mode = 'com
   const validation = validateParsedOutput(parsed, units, formType);
 
   if (!validation.ok) {
+    setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null }, onProgress);
     const error = new Error(`Der erzeugte Text hat die Qualitätsprüfung nicht bestanden (${validation.problems.join(' | ')}).`);
     error.code = 'QUALITY_REJECTED';
     throw error;
@@ -408,11 +427,12 @@ export function getModelInfo() {
     id: MODEL_ID,
     label: MODEL_LABEL,
     profile: MODEL_PROFILE,
-    revision: MODEL_REVISION,
-    dtype: modelDtype || 'q4f16/q4 automatisch',
+    revision: null,
+    dtype: 'q4f16_1',
     device: 'webgpu',
-    runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
-    persistentCache: 'Browser-Cache',
-    pipeline: 'Qwen 3.5 0.8B Text-only → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
+    runtimeLabel: 'WebLLM 0.2.84 · WebGPU · lokal gebündelt',
+    persistentCache: 'WebLLM Cache API',
+    contextWindow: MODEL_CONTEXT_WINDOW,
+    pipeline: 'Qwen 3.5 0.8B MLC → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
   };
 }
