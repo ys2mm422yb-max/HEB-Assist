@@ -8,11 +8,10 @@ import {
   validateReasonedSection,
 } from './reasoning-pipeline.js';
 
-const MODEL_ID = 'onnx-community/Qwen3.5-0.8B-ONNX';
-const MODEL_REVISION = '7126260ed8e5acbe7b5d0b84bbec84df50b63a87';
-const MODEL_LABEL = 'Qwen 3.5 0.8B';
-const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-q4f16-heb-v12';
-const MODEL_DTYPE = 'q4f16';
+const MODEL_ID = 'onnx-community/Qwen3.5-0.8B-Text-ONNX';
+const MODEL_REVISION = '1e45daba048899e7f771657ada617ec49350aa91';
+const MODEL_LABEL = 'Qwen 3.5 0.8B Text';
+const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
 const MAX_NEW_TOKENS = 620;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
 const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
@@ -70,6 +69,7 @@ Danach SECTION_B usw. bis zum letzten Unterpunkt. EVIDENCE darf nur IDs aus den 
 let generatorPromise = null;
 let generatorInstance = null;
 let modelInfo = null;
+let modelDtype = null;
 let modelState = { status: 'idle', percent: 0, text: 'KI wird vorbereitet …', error: null, errorCode: null };
 
 function setModelState(next, onProgress) {
@@ -149,21 +149,49 @@ export function isLocalAiReady() {
   return Boolean(generatorInstance);
 }
 
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${Math.round(mb)} MB`;
+}
+
 function mapLoadProgress(info, onProgress) {
-  let percent = modelState.percent || 3;
+  let percent = Number.isFinite(modelState.percent) ? modelState.percent : 2;
+  let text = 'Sprachmodell wird heruntergeladen und lokal gespeichert …';
+
   if (info?.status === 'progress_total' && Number.isFinite(info.progress)) {
-    percent = Math.max(4, Math.min(96, Math.round(info.progress)));
+    percent = Math.max(2, Math.min(98, Math.round(info.progress)));
+    const loaded = formatBytes(info.loaded);
+    const total = formatBytes(info.total);
+    const amount = loaded && total ? ` · ${loaded} von ${total}` : '';
+    text = `Gesamtdownload ${Math.round(info.progress)} %${amount}`;
   } else if (info?.status === 'progress' && Number.isFinite(info.progress)) {
-    percent = Math.max(percent, Math.min(94, Math.round(info.progress)));
+    const filename = String(info.file || '').split('/').at(-1) || 'Modelldatei';
+    const loaded = formatBytes(info.loaded);
+    const total = formatBytes(info.total);
+    const amount = loaded && total ? ` · ${loaded} von ${total}` : '';
+    text = `${filename} wird geladen · ${Math.round(info.progress)} %${amount}`;
+  } else if (info?.status === 'download' || info?.status === 'initiate') {
+    text = 'Modelldateien werden vorbereitet …';
+  } else if (info?.status === 'done') {
+    text = 'Eine Modelldatei ist vollständig geladen …';
   } else if (info?.status === 'ready') {
-    percent = 96;
+    percent = 99;
+    text = 'Modelldateien sind geladen. KI wird initialisiert …';
   }
 
-  let text = 'Sprachmodell wird heruntergeladen und lokal gespeichert …';
-  if (info?.status === 'ready' || percent >= 95) text = 'Sprachmodell wird auf dem Gerät gestartet …';
-  if (info?.status === 'done' && percent < 95) text = 'Modelldateien werden lokal vorbereitet …';
-
   setModelState({ status: 'loading', percent, text, error: null, errorCode: null }, onProgress);
+}
+
+async function resolveModelDtype() {
+  try {
+    const adapter = await navigator.gpu?.requestAdapter?.();
+    if (adapter?.features?.has?.('shader-f16')) return 'q4f16';
+  } catch {
+    // q4 works without shader-f16 and is the compatibility fallback.
+  }
+  return 'q4';
 }
 
 async function loadGenerator(onProgress, { force = false } = {}) {
@@ -193,13 +221,21 @@ async function loadGenerator(onProgress, { force = false } = {}) {
       setModelState({ status: 'loading', percent: 2, text: 'Lokale KI-Laufzeit wird vom Gerät geladen …', error: null, errorCode: null }, onProgress);
       try { await navigator.storage?.persist?.(); } catch { /* optional */ }
 
+      modelDtype = await resolveModelDtype();
+      setModelState({
+        status: 'loading',
+        percent: 3,
+        text: modelDtype === 'q4f16'
+          ? 'Textmodell wird für dieses Gerät vorbereitet …'
+          : 'Kompatibler Textmodell-Modus wird vorbereitet …',
+        error: null,
+        errorCode: null,
+      }, onProgress);
+
       const generator = await pipeline('text-generation', MODEL_ID, {
         revision: MODEL_REVISION,
         device: 'webgpu',
-        dtype: {
-          embed_tokens: MODEL_DTYPE,
-          decoder_model_merged: MODEL_DTYPE,
-        },
+        dtype: modelDtype,
         progress_callback: (info) => mapLoadProgress(info, onProgress),
       });
 
@@ -209,11 +245,11 @@ async function loadGenerator(onProgress, { force = false } = {}) {
         label: MODEL_LABEL,
         profile: MODEL_PROFILE,
         revision: MODEL_REVISION,
-        dtype: MODEL_DTYPE,
+        dtype: modelDtype,
         device: 'webgpu',
         runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
         persistentCache: 'Browser-Cache',
-        pipeline: 'Qwen 3.5 0.8B Textpfad → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
+        pipeline: 'Qwen 3.5 0.8B Text-only → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
       };
 
       clearStartGuard();
@@ -222,6 +258,7 @@ async function loadGenerator(onProgress, { force = false } = {}) {
     })().catch((error) => {
       generatorPromise = null;
       generatorInstance = null;
+      modelDtype = null;
       clearStartGuard();
       const message = error?.message || String(error);
       setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: message, errorCode: error?.code || null }, onProgress);
@@ -357,7 +394,9 @@ export async function generateHebText({ notes, area, formType = 'A', mode = 'com
   const validation = validateParsedOutput(parsed, units, formType);
 
   if (!validation.ok) {
-    throw new Error(`Der erzeugte Text hat die Qualitätsprüfung nicht bestanden (${validation.problems.join(' | ')}).`);
+    const error = new Error(`Der erzeugte Text hat die Qualitätsprüfung nicht bestanden (${validation.problems.join(' | ')}).`);
+    error.code = 'QUALITY_REJECTED';
+    throw error;
   }
 
   setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null }, onProgress);
@@ -370,10 +409,10 @@ export function getModelInfo() {
     label: MODEL_LABEL,
     profile: MODEL_PROFILE,
     revision: MODEL_REVISION,
-    dtype: MODEL_DTYPE,
+    dtype: modelDtype || 'q4f16/q4 automatisch',
     device: 'webgpu',
     runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
     persistentCache: 'Browser-Cache',
-    pipeline: 'Qwen 3.5 0.8B Textpfad → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
+    pipeline: 'Qwen 3.5 0.8B Text-only → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
   };
 }
