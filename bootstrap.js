@@ -1,4 +1,4 @@
-const BUILD_ID = '2026-09-06-1105';
+const BUILD_ID = '2026-09-06-v12';
 
 let serviceWorkerRegistration = null;
 let aiModule = null;
@@ -24,10 +24,13 @@ function updateEarlyStartupUi(status = {}) {
   if (!ui.gate) return;
   const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, Math.round(status.percent))) : 0;
   if (status.status === 'error') {
-    ui.title.textContent = 'KI konnte nicht gestartet werden';
-    ui.text.textContent = 'HEB Assist bleibt gesperrt, bis die lokale KI erfolgreich gestartet wurde.';
+    const restartBlocked = status.errorCode === 'PREVIOUS_START_INCOMPLETE';
+    ui.title.textContent = restartBlocked ? 'Automatischer KI-Neustart gestoppt' : 'KI konnte nicht gestartet werden';
+    ui.text.textContent = restartBlocked
+      ? 'Der vorherige Modellstart wurde nicht sauber abgeschlossen. HEB Assist lädt das Modell nicht automatisch erneut.'
+      : 'HEB Assist bleibt gesperrt, bis die lokale KI erfolgreich gestartet wurde.';
     ui.percent.textContent = '—';
-    ui.stage.textContent = 'Start fehlgeschlagen';
+    ui.stage.textContent = restartBlocked ? 'Erneuter Download gestoppt' : 'Start fehlgeschlagen';
     ui.track.hidden = true;
     if (ui.error && ui.errorText) { ui.error.hidden = false; ui.errorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.'; }
     return;
@@ -51,7 +54,7 @@ function finishReadyUiIfNeeded() {
 
 async function startLocalAiImmediately() {
   if (aiStartupPromise) return aiStartupPromise;
-  aiStartupPromise = (async () => { aiModule = await import('./ai-engine.js'); const capability = aiModule.getLocalAiCapability?.(); if (!capability?.supported) return; await aiModule.preloadLocalAi(updateEarlyStartupUi); })().catch((error) => { updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error) }); throw error; });
+  aiStartupPromise = (async () => { aiModule = await import(`./ai-engine.js?build=${BUILD_ID}`); const capability = aiModule.getLocalAiCapability?.(); if (!capability?.supported) return; await aiModule.preloadLocalAi(updateEarlyStartupUi); })().catch((error) => { updateEarlyStartupUi({ status: 'error', percent: 0, error: error?.message || String(error), errorCode: error?.code || null }); throw error; });
   return aiStartupPromise;
 }
 

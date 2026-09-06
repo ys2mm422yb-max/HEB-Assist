@@ -8,13 +8,15 @@ import {
   validateReasonedSection,
 } from './reasoning-pipeline.js';
 
-const MODEL_ID = 'onnx-community/gemma-3-1b-it-ONNX';
-const MODEL_REVISION = 'a58439f40017d3b99c7d378ff525e54e0ba08ebf';
-const MODEL_LABEL = 'Gemma 3 1B';
-const MODEL_PROFILE = 'transformersjs-gemma3-1b-q4f16-heb-v11';
+const MODEL_ID = 'onnx-community/Qwen3.5-0.8B-ONNX';
+const MODEL_REVISION = '7126260ed8e5acbe7b5d0b84bbec84df50b63a87';
+const MODEL_LABEL = 'Qwen 3.5 0.8B';
+const MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-q4f16-heb-v12';
 const MODEL_DTYPE = 'q4f16';
 const MAX_NEW_TOKENS = 620;
 const MISSING_TEXT = 'Hierzu liegen keine ausreichenden Angaben vor.';
+const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
+const START_GUARD_MAX_AGE_MS = 30 * 60 * 1000;
 
 const SECTION_DEFS = {
   A: [
@@ -68,7 +70,7 @@ Danach SECTION_B usw. bis zum letzten Unterpunkt. EVIDENCE darf nur IDs aus den 
 let generatorPromise = null;
 let generatorInstance = null;
 let modelInfo = null;
-let modelState = { status: 'idle', percent: 0, text: 'KI wird vorbereitet …', error: null };
+let modelState = { status: 'idle', percent: 0, text: 'KI wird vorbereitet …', error: null, errorCode: null };
 
 function setModelState(next, onProgress) {
   modelState = { ...modelState, ...next };
@@ -88,6 +90,44 @@ function configureRuntime() {
 }
 
 configureRuntime();
+
+function readStartGuard() {
+  try {
+    const raw = globalThis.localStorage?.getItem(START_GUARD_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearStartGuard() {
+  try { globalThis.localStorage?.removeItem(START_GUARD_KEY); } catch { /* optional browser storage */ }
+}
+
+function hasRecentIncompleteStart() {
+  const guard = readStartGuard();
+  if (!guard || guard.profile !== MODEL_PROFILE) return false;
+  const startedAt = Number(guard.startedAt);
+  const age = Date.now() - startedAt;
+  if (!Number.isFinite(startedAt) || age < 0 || age > START_GUARD_MAX_AGE_MS) {
+    clearStartGuard();
+    return false;
+  }
+  return true;
+}
+
+function markStartGuard() {
+  try {
+    globalThis.localStorage?.setItem(START_GUARD_KEY, JSON.stringify({
+      profile: MODEL_PROFILE,
+      startedAt: Date.now(),
+    }));
+  } catch {
+    // Der Schutz ist best-effort; fehlender Website-Speicher darf den Modellstart nicht verhindern.
+  }
+}
 
 export function getLocalAiCapability() {
   const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -123,30 +163,43 @@ function mapLoadProgress(info, onProgress) {
   if (info?.status === 'ready' || percent >= 95) text = 'Sprachmodell wird auf dem Gerät gestartet …';
   if (info?.status === 'done' && percent < 95) text = 'Modelldateien werden lokal vorbereitet …';
 
-  setModelState({ status: 'loading', percent, text, error: null }, onProgress);
+  setModelState({ status: 'loading', percent, text, error: null, errorCode: null }, onProgress);
 }
 
-async function loadGenerator(onProgress) {
+async function loadGenerator(onProgress, { force = false } = {}) {
   if (generatorInstance) {
-    setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+    setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null }, onProgress);
     return generatorInstance;
   }
 
   if (!getLocalAiCapability().supported) {
     const error = new Error('Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.');
-    setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: error.message }, onProgress);
+    error.code = 'WEBGPU_UNAVAILABLE';
+    setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: error.message, errorCode: error.code }, onProgress);
     throw error;
   }
 
   if (!generatorPromise) {
+    if (force) clearStartGuard();
+    if (!force && hasRecentIncompleteStart()) {
+      const error = new Error('Der vorherige Modellstart wurde nicht sauber abgeschlossen. Ein automatischer erneuter Download wurde gestoppt. Starte die KI nur über „KI erneut starten“, wenn du bewusst einen neuen Versuch auslösen möchtest.');
+      error.code = 'PREVIOUS_START_INCOMPLETE';
+      setModelState({ status: 'error', percent: 0, text: 'Automatischer Neustart gestoppt', error: error.message, errorCode: error.code }, onProgress);
+      throw error;
+    }
+
+    markStartGuard();
     generatorPromise = (async () => {
-      setModelState({ status: 'loading', percent: 2, text: 'Lokale KI-Laufzeit wird vom Gerät geladen …', error: null }, onProgress);
+      setModelState({ status: 'loading', percent: 2, text: 'Lokale KI-Laufzeit wird vom Gerät geladen …', error: null, errorCode: null }, onProgress);
       try { await navigator.storage?.persist?.(); } catch { /* optional */ }
 
       const generator = await pipeline('text-generation', MODEL_ID, {
         revision: MODEL_REVISION,
         device: 'webgpu',
-        dtype: MODEL_DTYPE,
+        dtype: {
+          embed_tokens: MODEL_DTYPE,
+          decoder_model_merged: MODEL_DTYPE,
+        },
         progress_callback: (info) => mapLoadProgress(info, onProgress),
       });
 
@@ -160,16 +213,18 @@ async function loadGenerator(onProgress) {
         device: 'webgpu',
         runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
         persistentCache: 'Browser-Cache',
-        pipeline: 'Gemma 3 1B Gesamtsynthese → lokale Sicherheitsprüfung',
+        pipeline: 'Qwen 3.5 0.8B Textpfad → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
       };
 
-      setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+      clearStartGuard();
+      setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null }, onProgress);
       return generator;
     })().catch((error) => {
       generatorPromise = null;
       generatorInstance = null;
+      clearStartGuard();
       const message = error?.message || String(error);
-      setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: message }, onProgress);
+      setModelState({ status: 'error', percent: 0, text: 'KI nicht verfügbar', error: message, errorCode: error?.code || null }, onProgress);
       throw error;
     });
   } else {
@@ -179,8 +234,8 @@ async function loadGenerator(onProgress) {
   return generatorPromise;
 }
 
-export function preloadLocalAi(onProgress) {
-  return loadGenerator(onProgress);
+export function preloadLocalAi(onProgress, options) {
+  return loadGenerator(onProgress, options);
 }
 
 function sectionInstruction(formType) {
@@ -252,6 +307,7 @@ async function runGeneration(generator, messages, onProgress) {
     generatedChars: 0,
     completionTokens: 0,
     error: null,
+    errorCode: null,
   }, onProgress);
 
   const streamer = new TextStreamer(generator.tokenizer, {
@@ -271,6 +327,7 @@ async function runGeneration(generator, messages, onProgress) {
         generatedChars,
         completionTokens: 0,
         error: null,
+        errorCode: null,
       }, onProgress);
     },
   });
@@ -303,7 +360,7 @@ export async function generateHebText({ notes, area, formType = 'A', mode = 'com
     throw new Error(`Der erzeugte Text hat die Qualitätsprüfung nicht bestanden (${validation.problems.join(' | ')}).`);
   }
 
-  setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null }, onProgress);
+  setModelState({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null }, onProgress);
   return makeFinalText(formType, parsed);
 }
 
@@ -317,6 +374,6 @@ export function getModelInfo() {
     device: 'webgpu',
     runtimeLabel: 'Transformers.js 4.2.0 · ONNX Runtime WebGPU · lokal gebündelt',
     persistentCache: 'Browser-Cache',
-    pipeline: 'Gemma 3 1B Gesamtsynthese → lokale Sicherheitsprüfung',
+    pipeline: 'Qwen 3.5 0.8B Textpfad → HEB-Gesamtsynthese → lokale Sicherheitsprüfung',
   };
 }

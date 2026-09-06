@@ -315,11 +315,14 @@ function updateStartupStatus(status = {}, percent = 0) {
   showStartupGate();
 
   if (status.status === 'error') {
-    startupTitle.textContent = 'KI konnte nicht gestartet werden';
-    startupText.textContent = 'HEB Assist bleibt gesperrt, bis die lokale KI erfolgreich gestartet wurde.';
+    const restartBlocked = status.errorCode === 'PREVIOUS_START_INCOMPLETE';
+    startupTitle.textContent = restartBlocked ? 'Automatischer KI-Neustart gestoppt' : 'KI konnte nicht gestartet werden';
+    startupText.textContent = restartBlocked
+      ? 'Der vorherige Modellstart wurde nicht sauber abgeschlossen. HEB Assist lädt das Modell nicht automatisch erneut.'
+      : 'HEB Assist bleibt gesperrt, bis die lokale KI erfolgreich gestartet wurde.';
     startupProgressTrack.hidden = true;
     startupPercent.textContent = '—';
-    startupStage.textContent = 'Start fehlgeschlagen';
+    startupStage.textContent = restartBlocked ? 'Erneuter Download gestoppt' : 'Start fehlgeschlagen';
     startupErrorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.';
     startupError.hidden = false;
     startupRetryButton.hidden = false;
@@ -369,9 +372,11 @@ function updateEngineStatus(status = {}) {
   }
 
   if (status.status === 'error') {
-    engineBadge.textContent = 'KI nicht verfügbar';
+    engineBadge.textContent = status.errorCode === 'PREVIOUS_START_INCOMPLETE' ? 'KI-Neustart gestoppt' : 'KI nicht verfügbar';
     engineBadge.classList.add('warning');
-    engineStatusText.textContent = 'Das lokale Sprachmodell konnte nicht gestartet werden. HEB Assist verarbeitet deshalb keine HEB-Eingaben.';
+    engineStatusText.textContent = status.errorCode === 'PREVIOUS_START_INCOMPLETE'
+      ? 'Ein vorheriger Modellstart wurde nicht sauber abgeschlossen. Ein automatischer erneuter Download wurde gestoppt.'
+      : 'Das lokale Sprachmodell konnte nicht gestartet werden. HEB Assist verarbeitet deshalb keine HEB-Eingaben.';
     engineProgressTrack.hidden = true;
     engineErrorText.textContent = status.error || 'Unbekannter Fehler beim Start der lokalen KI.';
     engineErrorBox.hidden = false;
@@ -405,12 +410,12 @@ function updateEngineStatus(status = {}) {
   }
 }
 
-async function startLocalAi() {
+async function startLocalAi({ force = false } = {}) {
   if (aiLoadInProgress || isLocalAiReady()) return;
   aiLoadInProgress = true;
-  updateEngineStatus({ status: 'idle', percent: 0, error: null });
+  updateEngineStatus({ status: 'idle', percent: 0, error: null, errorCode: null });
   try {
-    await preloadLocalAi(updateEngineStatus);
+    await preloadLocalAi(updateEngineStatus, { force });
   } catch (error) {
     console.warn('Lokale KI konnte nicht gestartet werden:', error?.message || error);
   } finally {
@@ -483,13 +488,13 @@ generateButton.addEventListener('click', async () => {
       onProgress: updateEngineStatus,
     });
     setResult(aiDraft, 'ready');
-    updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
+    updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null });
   } catch (error) {
     console.warn('Lokale KI-Generierung fehlgeschlagen:', error?.message || error);
     stopGenerationTimer();
 
     if (isLocalAiReady()) {
-      updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null });
+      updateEngineStatus({ status: 'ready', percent: 100, text: 'KI ist bereit ✓', error: null, errorCode: null });
       const qualityRejected = error?.code === 'QUALITY_REJECTED';
       const timedOut = error?.code === 'GENERATION_TIMEOUT';
       setResult(
@@ -506,6 +511,7 @@ generateButton.addEventListener('click', async () => {
         percent: 0,
         text: 'KI nicht verfügbar',
         error: error?.message || String(error),
+        errorCode: error?.code || null,
       });
       setResult('Die lokale KI konnte während der Verarbeitung nicht weiterarbeiten. Die Eingabe wurde nicht durch einen Ersatzmodus verarbeitet.', 'error');
     }
@@ -531,9 +537,9 @@ engineBadge.addEventListener('click', () => detailsDialog.showModal());
 closeDialog.addEventListener('click', () => detailsDialog.close());
 retryAiButton.addEventListener('click', () => {
   detailsDialog.close();
-  void startLocalAi();
+  void startLocalAi({ force: true });
 });
-startupRetryButton.addEventListener('click', () => void startLocalAi());
+startupRetryButton.addEventListener('click', () => void startLocalAi({ force: true }));
 detailsDialog.addEventListener('click', (event) => {
   if (event.target === detailsDialog) detailsDialog.close();
 });
@@ -548,6 +554,7 @@ if (!capability.supported) {
     status: 'error',
     percent: 0,
     error: 'Dieses Gerät bzw. dieser Browser stellt WebGPU aktuell nicht bereit.',
+    errorCode: 'WEBGPU_UNAVAILABLE',
   });
 } else {
   window.setTimeout(() => void startLocalAi(), 250);

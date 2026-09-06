@@ -1,4 +1,4 @@
-const CACHE_NAME = 'heb-assist-shell-v37';
+const CACHE_NAME = 'heb-assist-shell-v38';
 const APP_SHELL = [
   './','./index.html','./styles.css','./dark-mode.css','./mobile-fixes.css','./generation-progress.css','./bootstrap.js','./app.js','./ai-engine.js','./vendor/transformers.js','./vendor/ort-wasm-simd-threaded.jsep.mjs','./vendor/ort-wasm-simd-threaded.jsep.wasm','./evidence-pipeline.js','./reasoning-pipeline.js','./privacy-filter.js','./heb-knowledge.js','./manifest.webmanifest','./icon.svg'
 ];
