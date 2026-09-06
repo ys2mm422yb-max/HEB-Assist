@@ -8,10 +8,12 @@ on:
       - 'index.html'
       - 'styles.css'
       - 'dark-mode.css'
+      - 'mobile-fixes.css'
       - 'bootstrap.js'
       - 'app.js'
       - 'ai-engine.js'
       - 'evidence-pipeline.js'
+      - 'evidence-router.js'
       - 'privacy-filter.js'
       - 'heb-knowledge.js'
       - 'manifest.webmanifest'
@@ -53,6 +55,7 @@ jobs:
           node --check app.js
           node --check ai-engine.js
           node --check evidence-pipeline.js
+          node --check evidence-router.js
           node --check privacy-filter.js
           node --check heb-knowledge.js
           node --check sw.js
