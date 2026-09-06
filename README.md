@@ -44,44 +44,51 @@ Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwend
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 - keine zentrale Fallhistorie und kein Login in Version 1
 
-## Neue Generierungsarchitektur: einzeln belegte Mikrosätze
+## Aktuelle Generierungsarchitektur: v8 Quellenrouting + lokale KI
 
-Die bisherigen iPhone-Tests haben gezeigt, dass ein 1B-Modell bei freier deutscher HEB-Generierung sprachlich und fachlich unzuverlässig sein kann. Deshalb darf das Modell nicht mehr frei aus dem gesamten Falltext schreiben.
+Die realen iPhone-Tests haben gezeigt, dass ein 1B-Modell bei freier deutscher HEB-Generierung nicht zuverlässig genug ist. Die vorherige v7-Architektur war zwar strenger, ließ das kleine Modell aber jeden HEB-Unterpunkt aus dem gesamten Quellenpaket selbst erkennen und danach nochmals mit demselben Modell verifizieren. Im realen Test führte das zu falschem `keine ausreichenden Angaben` und unnötigen Verwerfungen.
 
-Der aktuelle Ablauf ist quellengebunden:
+v8 trennt deshalb Auswahl und Formulierung:
 
-1. Die Eingabe wird lokal in unveränderte Originalaussagen mit IDs wie `S1`, `S2`, `S3` zerlegt.
-2. Das vollständig gestartete lokale Sprachmodell ordnet ausschließlich diese vorhandenen Quellen-IDs den offiziellen HEB-Unterpunkten zu.
-3. Nicht existierende oder vom Modell erfundene IDs werden verworfen.
-4. Für die eigentliche Formulierung erhält das Sprachmodell **immer nur genau einen freigegebenen Originalbeleg**.
-5. Aus diesem einen Beleg darf es genau einen kurzen HEB-Satz formulieren.
-6. Dieser Mikrosatz wird lokal gegen genau seinen Originalbeleg geprüft. Dadurch können Inhalte verschiedener Aussagen nicht unbemerkt miteinander vermischt werden.
-7. Nur bestandene Mikrosätze werden anschließend zu dem jeweiligen HEB-Unterpunkt zusammengesetzt.
-8. Fällt ein Mikrosatz durch die Prüfung, wird der gesamte Entwurf verworfen. Es erscheint **kein** regel- oder regexbasierter Ersatztext als vermeintliche KI-Ausgabe.
+1. Die Eingabe wird lokal in unveränderte Originalaussagen zerlegt.
+2. Eine rein lokale Routing-Schicht wählt für jeden offiziellen HEB-Unterpunkt nur passende Originalaussagen aus.
+3. Diese Routing-Schicht **erzeugt keinen HEB-Text** und ist kein Ersatzmodus.
+4. Erst das vollständig gestartete lokale Sprachmodell formuliert aus dem verkleinerten Quellenpaket einen kurzen HEB-Abschnitt.
+5. Die KI-Ausgabe wird anschließend lokal gegen die ausgewählten Originalaussagen geprüft.
+6. Harte Sperren blockieren u. a. erfundene Ursachen, Bewertungen, fremde Themen, neue Zahlen, veränderten Unterstützungsumfang, kaputte Zeichensetzung und bekannte degenerierte Fehlmuster.
+7. Besteht der erste KI-Entwurf die Sicherheitsprüfung nicht, gibt es höchstens einen zweiten, ausdrücklich quellen-nahen KI-Versuch.
+8. Fällt auch dieser Versuch durch, wird nur der betroffene HEB-Unterpunkt als nicht sicher formulierbar gekennzeichnet. Es erscheint kein regel-/regexbasierter Ersatztext als vermeintliche KI-Ausgabe.
+9. Fehlen tatsächlich Informationen – z. B. ein Ziel, eine Entwicklung oder ein Anbieter – wird dies transparent kenntlich gemacht statt ergänzt.
 
-Die Quellenprüfung kontrolliert unter anderem:
-
-- nicht belegte Ursachen
-- wertende Formulierungen
-- neue Zahlen
-- Fantasiewörter und degenerierte Bindestrichketten
-- auffällige Zeichensetzung
-- nicht durch den konkreten Einzelbeleg verankerte Inhaltswörter
-- unvollständige oder zu lange Sätze
-
-Zusätzlich gelten fachliche Sperren: Eine bloße Situationsbeschreibung wird nicht automatisch zu einem Ziel. Bei HEB B/C darf ohne tatsächlichen zeitlichen Vergleich keine Entwicklung erfunden werden.
+Die Routing-Schicht dient ausschließlich dazu, die Aufgabe für das kleine lokale Modell zu verkleinern. Die sichtbare HEB-Prosa stammt weiterhin nur aus dem vollständig gestarteten lokalen Sprachmodell.
 
 ## Automatische Regressionstests
 
-Vor jedem GitHub-Pages-Deploy werden JavaScript-Syntaxprüfungen und synthetische Regressionstests ausgeführt. Die Tests decken unter anderem genau die bisher beobachteten Fehler ab:
+Vor jedem GitHub-Pages-Deploy werden ausgeführt:
+
+- JavaScript-Syntaxprüfungen
+- synthetische Quellen- und Routing-Regressionstests
+- Browser-Smoke-Tests in Desktop Chromium und Desktop WebKit
+- Android-ähnlicher Chromium-Viewport
+- iPhone-ähnlicher WebKit-Viewport
+- Prüfung von HEB A/B/C und den fünf offiziellen Bereichen
+- Prüfung der Eingabesperre ohne gestartete KI
+- Dark-Mode-Prüfung
+- Prüfung auf mobile Viewport-Überläufe
+- Manifest- und Service-Worker-Prüfung
+
+Die Regressionstests decken insbesondere bekannte Fehler ab:
 
 - erfundene Ursache wie „Ermüdung“
 - Verschiebung von Unterstützung beim Beginn hin zu Unterstützung bei der Durchführung
 - Vermischung verschiedener Originalaussagen
 - wertende Formulierungen wie „gute Idee“
 - degenerierte Zeichensetzung und kaputte KI-Ausgaben
+- korrektes Routing eines verbalen Impulses zum Hilfebedarf
+- kein erfundenes Ziel ohne ausdrückliche Zielangabe
+- keine automatische Maßnahme aus einem bloß genannten Unterstützungsbedarf
 
-Ein fehlgeschlagener Test verhindert den Deploy.
+Ein fehlgeschlagener relevanter Test verhindert den Deploy.
 
 ## Externe Netzwerkzugriffe
 
@@ -100,8 +107,9 @@ Die bisherigen Tests haben mehrere Grenzen sichtbar gemacht:
 - größere lokale Modelle führten auf dem getesteten iPhone/Safari teils zu Speicher- bzw. Webseitenprozess-Abbrüchen
 - sehr kleine Modelle waren stabiler, lieferten aber fachlich unbrauchbare deutsche Texte
 - Llama 3.2 1B läuft auf dem Gerät stabiler als größere getestete Varianten, erzeugte im freien Generierungsmodus jedoch weiterhin erfundene oder sprachlich fehlerhafte Inhalte
+- v7 war zu streng bzw. verließ sich zu stark auf dasselbe kleine Modell für Erkennung und Gegenprüfung; dadurch wurden vorhandene Angaben fälschlich nicht erkannt oder verworfen
 
-Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf weiterem Prompt-Tuning, sondern auf harter Quellenbindung und überprüfbarer Mikro-Generierung.
+Daraus folgt: Der aktuelle Schwerpunkt liegt auf kleiner, klarer KI-Aufgabe, Quellenbindung und nachprüfbarer Sicherheitslogik statt auf freier HEB-Generierung.
 
 ## Aktuell implementiert
 
@@ -116,12 +124,15 @@ Daraus folgt: Der aktuelle Schwerpunkt liegt nicht auf weiterem Prompt-Tuning, s
 - lokaler Datenschutzfilter für typische direkte Identifikatoren
 - automatische PWA-Update-Erkennung und sichere Übernahme neuer Versionen
 - PWA-Manifest und Offline-App-Shell
+- automatischer Dark Mode entsprechend dem Systemmodus
 - Kopierfunktion
-- quellengebundene KI-Analyse, Mikrosatz-Generierung und lokale Quellenprüfung
+- v8 Quellenrouting + lokale KI-Formulierung + lokale Sicherheitsprüfung
 
 ## Entwicklungsworkflow
 
 Solange HEB-Assist ausdrücklich als Test-/Entwicklungsprojekt geführt wird, darf direkt auf `main` gearbeitet werden. Vor einer späteren Produktivfreigabe wird der strengere Branch-/PR-Workflow wieder eingeführt. Die verbindlichen Regeln stehen in `PROJECT_RULES.md`.
+
+GitHub ist die verbindliche technische Quelle. Änderungen gelten erst als veröffentlicht, wenn der zugehörige GitHub-Actions-Lauf erfolgreich war und GitHub Pages tatsächlich deployed wurde. Der tatsächliche Prüfstand wird in `TEST_STATUS.md` gepflegt.
 
 ## Aktueller Status
 
