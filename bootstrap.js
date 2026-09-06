@@ -1,4 +1,4 @@
-const BUILD_ID = '2026-09-06-v12';
+const BUILD_ID = '2026-09-06-v13';
 
 let serviceWorkerRegistration = null;
 let aiModule = null;
@@ -39,7 +39,7 @@ function updateEarlyStartupUi(status = {}) {
     ui.bar.style.width = '100%'; ui.track.setAttribute('aria-valuenow', '100'); ui.percent.textContent = '100 %'; ui.stage.textContent = 'KI ist bereit'; ui.title.textContent = 'Lokale KI ist bereit'; ui.text.textContent = 'HEB Assist kann jetzt verwendet werden.'; return;
   }
   if (status.status === 'loading') {
-    ui.bar.style.width = `${Math.max(3, percent)}%`; ui.track.setAttribute('aria-valuenow', String(percent)); ui.percent.textContent = `${percent} %`; ui.stage.textContent = status.text || 'Sprachmodell wird vorbereitet …'; ui.title.textContent = percent >= 97 ? 'Lokale KI wird gestartet' : 'Lokale KI wird geladen'; ui.text.textContent = percent >= 97 ? 'Das Sprachmodell wird jetzt auf diesem Gerät initialisiert.' : 'Das Sprachmodell wird direkt auf diesem Gerät vorbereitet.';
+    ui.bar.style.width = `${Math.max(3, percent)}%`; ui.track.setAttribute('aria-valuenow', String(percent)); ui.percent.textContent = `${percent} %`; ui.stage.textContent = status.text || 'Sprachmodell wird vorbereitet …'; ui.title.textContent = percent >= 99 ? 'Lokale KI wird gestartet' : 'Lokale KI wird geladen'; ui.text.textContent = percent >= 99 ? 'Die Modelldateien sind geladen. Das Sprachmodell wird jetzt auf diesem Gerät initialisiert.' : 'Das Sprachmodell wird direkt auf diesem Gerät vorbereitet.';
   }
 }
 
