@@ -21,10 +21,26 @@ test('PWA-Grunddateien und lokal gebündelte KI-Laufzeit sind erreichbar', async
   const manifest = await request.get('/manifest.webmanifest'); expect(manifest.ok()).toBeTruthy();
   const sw = await request.get('/sw.js'); expect(sw.ok()).toBeTruthy();
   const runtime = await request.get('/vendor/transformers.js'); expect(runtime.ok()).toBeTruthy(); expect((await runtime.text()).length).toBeGreaterThan(100000);
+  const webgpuRuntime = await request.get('/vendor/ort.webgpu.bundle.min.mjs'); expect(webgpuRuntime.ok()).toBeTruthy(); expect((await webgpuRuntime.text()).length).toBeGreaterThan(50000);
   const wasmLoader = await request.get('/vendor/ort-wasm-simd-threaded.jsep.mjs'); expect(wasmLoader.ok()).toBeTruthy();
   const wasm = await request.get('/vendor/ort-wasm-simd-threaded.jsep.wasm'); expect(wasm.ok()).toBeTruthy();
   const generationCss = await request.get('/generation-progress.css'); expect(generationCss.ok()).toBeTruthy();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth); expect(overflow).toBeLessThanOrEqual(2);
+});
+
+test('lokale Transformers.js-Runtime lässt sich als Browser-Modul ohne npm-Auflösungsfehler laden', async ({ page }) => {
+  await page.route(/^https:\/\//, (route) => route.abort());
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(async () => {
+    try {
+      const runtime = await import('/vendor/transformers.js?browser-import-test=1');
+      return { ok: typeof runtime.pipeline === 'function', error: '' };
+    } catch (error) {
+      return { ok: false, error: error?.message || String(error) };
+    }
+  });
+  expect(result.ok, result.error).toBeTruthy();
+  expect(result.error).not.toMatch(/does not resolve to a valid URL|onnxruntime-web\/webgpu/i);
 });
 
 test('App-Shell benötigt für die KI-Laufzeit keine externe JavaScript-CDN', async ({ page }) => {
