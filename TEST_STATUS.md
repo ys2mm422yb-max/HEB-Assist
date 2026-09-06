@@ -2,122 +2,99 @@
 
 Stand: 2026-09-06
 
+## Verbindlicher Teststatus
+
+HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen Freigabe dürfen ausschließlich vollständig synthetische Testfälle verwendet werden.
+
 ## Bereits geprüft
 
-- Datenschutzfilter mit vollständig synthetischen Beispielen geprüft:
-  - normale HEB-Beschreibung: kein Treffer
-  - E-Mail-Adresse: erkannt
-  - Telefonnummer: erkannt
-  - konkretes Datum: erkannt
-  - Straßenadresse: erkannt
-  - Postleitzahl: erkannt
-  - Personenname nach Anrede: erkannt
-  - typische Versicherungsnummer: erkannt
+- Datenschutzfilter mit vollständig synthetischen Beispielen: normale HEB-Beschreibung ohne Treffer; E-Mail, Telefonnummer, konkretes Datum, Straßenadresse, Postleitzahl, Personenname nach Anrede und typische Versicherungsnummer werden erkannt.
 - GitHub-Pages-Testseite ist grundsätzlich erreichbar.
 - Reale Darstellung auf einem iPhone wurde mehrfach geprüft.
-- HEB A / B / C und die fünf offiziellen HEB-Bereiche wurden anhand der bereitgestellten bayerischen HEB-Bögen abgeglichen.
-- Die App-Shell aktualisiert sich automatisch über GitHub Pages / Service Worker.
-- Die eigentliche HEB-Eingabe bleibt bis zum vollständigen Start der lokalen KI gesperrt.
-- Der aktuelle Browser-Smoke-Testlauf ist vollständig grün: 16 von 16 Tests bestanden.
-- Der zuvor im iPhone-ähnlichen WebKit-Test gemessene horizontale Overflow ist im automatisierten Folgetest nicht mehr aufgetreten.
-- Der zugehörige GitHub-Pages-Deploy wurde erfolgreich abgeschlossen.
+- HEB A / B / C und die fünf offiziellen HEB-Hauptbereiche wurden anhand der bereitgestellten Bayerischer-Bezirketag-Bögen abgeglichen.
+- HEB-Eingaben bleiben gesperrt, bis das echte lokale Sprachmodell vollständig gestartet ist.
+- Kein externer KI-Inferenzserver und kein regel-/regexbasierter Ersatz-HEB.
+- Automatischer Dark Mode über `prefers-color-scheme` ist implementiert.
+- Automatische PWA-Aktualisierung über GitHub Pages / Service Worker ist implementiert.
 
-## Ergebnis der bisherigen iPhone-KI-Tests
+## Bisherige Modelltests auf iPhone/Safari
 
-### Größere Modelle / frühere Laufzeiten
+### Größere Modelle
 
-- Mehrere größere lokale Modellvarianten konnten zwar geladen werden, führten auf dem getesteten iPhone/Safari aber beim Start oder bei der autoregressiven Generierung zu Webseitenprozess-Abbrüchen.
+- Größere lokale Modellvarianten konnten teilweise geladen werden, führten auf dem getesteten iPhone aber beim Start oder bei der Generierung zu Webseitenprozess-/Speicherproblemen.
 - Ein Qwen-2.5-1.5B-WebLLM-Versuch war für die praktische iOS-Speichergrenze zu schwer.
-
-Ergebnis: Größer ist auf dem getesteten iPhone nicht automatisch besser; Stabilität und Speicherbedarf müssen real am Gerät geprüft werden.
 
 ### Sehr kleine Modelle
 
-- Gemma 3 270M konnte stabiler laufen, erzeugte aber fachlich völlig unbrauchbare Wiederholungen und Fantasiewörter.
-- Llama 3.2 1B läuft auf dem Gerät stabiler als die größeren getesteten Varianten.
-- Im früheren freien Generierungsmodus erzeugte auch Llama 3.2 1B nicht akzeptable Ausgaben, u. a.:
-  - erfundene Ursache „Ermüdung“
-  - wertende Aussage „gute Idee für die Selbstversorgung“
-  - ungrammatische Formulierungen wie „muss konkreten Hilfe leisten“
-  - zerstörte Wort-/Zeichensetzungsmuster wie `im!!!!! -Fähigkeiten`
-  - inhaltliche Verschiebung des Hilfebedarfs von der Initiierung zur Durchführung
+- Gemma 3 270M lief stabiler, erzeugte aber fachlich unbrauchbare Wiederholungen und Fantasiewörter.
+- Llama 3.2 1B Instruct läuft stabiler als die größeren getesteten Varianten, ist bei freier HEB-Generierung aber nicht zuverlässig genug.
+- Frühere freie Ausgaben enthielten u. a. erfundene Ursachen, Wertungen, ungrammatische Formulierungen und Bedeutungsverschiebungen des Hilfebedarfs.
 
-Ergebnis: Freie HEB-Generierung durch ein kleines lokales 1B-Modell ist fachlich nicht zuverlässig genug.
+## Letzter realer iPhone-Test von v7
 
-### Frühere quellengebundene Pipeline
+Der bekannte vollständig synthetische HEB-A-Testfall wurde erneut geprüft. Ergebnis:
 
-- Die harte Quellenbindung verhinderte, dass schlechter KI-Text angezeigt wurde.
-- Im realen iPhone-Test wurde der bekannte synthetische HEB-A-Testfall jedoch wiederholt vollständig verworfen und nur die Meldung „Der erzeugte Text hat die Qualitätsprüfung nicht bestanden“ angezeigt.
-- Spätere Zwischenstände reduzierten diese Totalverwerfung, konnten auf iOS aber zu sehr vielen seriellen Modellaufrufen und damit zu minutenlangem scheinbarem Hängen führen.
+- a) „Aktuelle Situation …“ wurde als nicht sicher formulierbar verworfen.
+- b) „Einschätzung des Hilfebedarfs“ meldete fälschlich keine ausreichenden Angaben, obwohl ein verbaler Impuls zur Initiierung ausdrücklich beschrieben war.
+- c) „Rahmenziele“ meldete korrekt keine ausreichenden Angaben, weil kein Ziel genannt war.
+- d) „Geplante Maßnahmen“ wurde als nicht sicher formulierbar verworfen, obwohl konkrete Erinnerungs-/Angebotshandlungen beschrieben waren.
 
-## Aktueller Entwicklungsstand
+Bewertung: **v7 ist fachlich/praktisch nicht ausreichend und wird nicht weiterverwendet.**
 
-HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82** mit einem Kontextfenster von 2048 Tokens. Die aktuelle Generierungsarchitektur ist **v7**.
+## Aktueller Entwicklungsstand: v8
 
-### Quellengebundene v7-Pipeline
+HEB-Assist verwendet weiterhin **Llama 3.2 1B Instruct q4f16 über WebLLM 0.2.82** mit 2048 Tokens Kontext. Die Generierungsarchitektur wurde auf **v8** umgestellt.
 
-1. Die Nutzereingabe wird lokal in unveränderte Originalaussagen zerlegt.
-2. Pro offiziellem HEB-Unterpunkt gibt es genau **einen** Generierungsaufruf.
-3. Danach gibt es genau **eine** lokale semantische Gegenprüfung für diesen Unterpunkt.
-4. Es gibt keine Kaskade mehr aus separater Quellenwahl, mehreren Mikrosätzen und Wiederholungsversuchen.
-5. Harte lokale Regeln blockieren u. a. erfundene Ursachen, neue Zahlen, Bedeutungsverschiebungen, Bewertungen, degenerierte Sprache und bekannte Fehlmuster.
-6. Ein unsicherer Unterpunkt verwirft nicht automatisch den gesamten HEB; nur der betroffene Unterpunkt wird als nicht sicher formulierbar markiert.
-7. Fehlende Ziele oder fehlende Verlaufsangaben werden transparent als fehlende Information behandelt, statt erfunden zu werden.
-8. Es gibt weiterhin keinen regelbasierten Ersatz-HEB und keine externe KI-Inferenz.
+### Quellenrouting + lokale KI
 
-Zusätzliche fachliche Sperren:
+1. Die Eingabe wird lokal in unveränderte Originalaussagen zerlegt.
+2. Eine lokale Routing-Schicht wählt für jeden offiziellen HEB-Unterpunkt nur passende Originalaussagen aus.
+3. Diese Routing-Schicht erzeugt **keinen HEB-Text** und ist kein Ersatzmodus.
+4. Erst die vollständig gestartete lokale KI formuliert aus dem verkleinerten Quellenpaket einen kurzen HEB-Abschnitt.
+5. Eine harte lokale Sicherheitsprüfung verwirft u. a. erfundene Ursachen, Bewertungen, fremde Themen, neue Zahlen, veränderten Unterstützungsumfang, kaputte Zeichensetzung und bekannte degenerierte Fehlmuster.
+6. Besteht der erste KI-Entwurf diese Prüfung nicht, gibt es höchstens einen zweiten, ausdrücklich quellen-nahen KI-Versuch.
+7. Es gibt keinen zweiten 1B-KI-Verifizierer mehr, weil dieser in v7 fachlich korrekte Inhalte zu häufig fälschlich verworfen hat.
+8. Fehlen tatsächlich Angaben, wird dies transparent gekennzeichnet; es werden keine Ziele, Entwicklungen, Hilfebedarfsstufen oder Anbieter erfunden.
 
-- Eine bloße Situationsbeschreibung erzeugt kein Ziel.
-- HEB B/C erhalten ohne tatsächlichen zeitlichen Vergleich keine erfundene Entwicklung.
-- Unterstützung bei der Initiierung darf nicht in Unterstützung bei der Durchführung umgedeutet werden.
-- Pflege-/medizinische Inhalte dürfen nur erscheinen, wenn sie tatsächlich in der Eingabe stehen.
-- Vorhandene Selbstständigkeit darf nicht abgeschwächt werden.
-- Keine formale Hilfebedarfsstufe ohne ausdrückliche Angabe.
+### Erwartung für den bekannten synthetischen HEB-A-Testfall
 
-## Automatisierte Regressionstests
+- a) muss aktuelle Situation und vorhandene Selbstständigkeit abbilden.
+- b) muss den Unterstützungsbedarf bei der **Initiierung** der Körperpflege erkennen; Unterstützung bei der Durchführung darf nicht erfunden werden.
+- c) muss ohne genanntes Ziel „keine ausreichenden Angaben“ ausgeben.
+- d) darf nur die tatsächlich beschriebenen Unterstützungs-Handlungen wie verbaler Impuls, Erinnerung und erneutes Angebot verwenden.
+
+## Automatisierte Tests
 
 Der GitHub-Pages-Workflow prüft vor dem Deploy:
 
-- JavaScript-Syntax der relevanten App-Dateien
-- synthetische Regressionstests der Quellenpipeline
-- Browser-Smoke-Tests mit Playwright in:
-  - Desktop Chromium
-  - Desktop WebKit
-  - Android-ähnlichem mobilem Chromium-Viewport
-  - iPhone-ähnlichem mobilem WebKit-Viewport
-- Erreichbarkeit von Manifest und Service Worker
+- JavaScript-Syntax der App-Dateien einschließlich `evidence-router.js`
+- synthetische Quellen- und Routing-Regressionstests
+- Browser-Smoke-Tests mit Playwright in Desktop Chromium, Desktop WebKit, Android-ähnlichem Chromium und iPhone-ähnlichem WebKit
 - HEB A/B/C und alle fünf offiziellen Hauptbereiche
-- Sperre der Eingabe ohne vollständig gestartetes Sprachmodell
-- keine rohen englischen Modellmeldungen in der Lade-/Fehleroberfläche
-- Dark Mode über den Systemmodus
-- horizontale Viewport-Überläufe auf mobilen Ansichten
+- Sperre ohne gestartete echte KI
+- keine rohen englischen Modellmeldungen in der Oberfläche
+- Dark Mode
+- mobile Viewport-Überläufe
+- Manifest und Service Worker
 
-Ein fehlgeschlagener relevanter Test verhindert den GitHub-Pages-Deploy.
+Ein relevanter fehlgeschlagener Test verhindert den GitHub-Pages-Deploy.
 
-### Letzter bestätigter Browserlauf
+## Zuletzt bestätigter veröffentlichter Stand vor v8
 
-- 16 Browser-Smoke-Tests wurden gestartet.
-- **16 von 16 Tests bestanden.**
-- Desktop Chromium, Desktop WebKit, Android-ähnliches Chromium und iPhone-ähnliches WebKit waren grün.
-- Der zuvor gemessene horizontale iPhone/WebKit-Overflow von 170 px trat nach der zusätzlichen mobilen CSS-Schutzschicht (`mobile-fixes.css`) im Folgetest nicht mehr auf.
-- JavaScript-Syntaxprüfung und synthetische Quellen-Regressionsprüfung bestanden ebenfalls.
-- GitHub Pages wurde anschließend erfolgreich veröffentlicht.
+- 16 von 16 Browser-Smoke-Tests bestanden.
+- Der frühere horizontale iPhone/WebKit-Overflow trat nach dem CSS-Fix nicht mehr auf.
+- GitHub Pages wurde erfolgreich veröffentlicht.
 
-## Darstellung
+## v8 noch offen
 
-- Ein automatischer Dark Mode ist implementiert. Die App folgt über `prefers-color-scheme` dem Systemmodus von iOS, Android oder Desktop.
-- Helle und dunkle Browser-/PWA-Theme-Farben sind im HTML hinterlegt.
-- Der Dark Mode ist automatisiert geprüft, aber noch nicht auf dem realen iPhone visuell abschließend bestätigt.
-
-## Noch nicht geprüft / keine Freigabe
-
-- v7-Pipeline noch nicht mit dem bekannten synthetischen HEB-A-Testfall auf dem realen iPhone erfolgreich abgeschlossen
-- fachliche Qualität der v7-HEB-A-Ausgabe noch nicht bewertet
-- Stabilität mehrerer aufeinanderfolgender Generierungen noch nicht bewertet
-- Dark Mode noch nicht auf dem realen iPhone visuell abschließend bewertet
+- aktueller GitHub-Actions-Lauf für v8 muss vollständig grün sein
+- v8 muss anschließend mit dem bekannten synthetischen HEB-A-Testfall auf dem realen iPhone geprüft werden
+- fachliche Qualität der v8-Ausgabe muss bewertet werden
+- mehrere aufeinanderfolgende Generierungen auf echtem iPhone noch nicht geprüft
+- Dark Mode auf realem iPhone noch nicht abschließend visuell geprüft
 - HEB B noch nicht mit synthetischem Verlaufsfall bewertet
 - HEB C noch nicht mit synthetischem Abschlussfall bewertet
-- kein realer Android-Gerätetest
+- kein realer Android-Gerätetest der vollständigen WebGPU-KI-Generierung
 - kein realer Desktop-WebGPU-Test der vollständigen lokalen KI-Generierung
 - keine produktive Freigabe für echte Falldaten
 
