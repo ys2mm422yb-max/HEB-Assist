@@ -43,6 +43,8 @@ GitHub-Actions-Lauf **#116** für diesen Commit ist vollständig erfolgreich abg
 
 Der Pages-Deployment-Schritt meldete erfolgreich `success`. Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
 
+Am 2026-09-06 wurden `README.md`, `TEST_STATUS.md`, `PRIVACY_POLICY.md` und `HEB_REFERENCE.md` auf den tatsächlichen v11-Stand synchronisiert. Diese Dokumentationskorrektur ändert keine App- oder KI-Logik.
+
 Diese automatisierten Tests beweisen **nicht**, dass die echte Gemma-3-WebGPU-Inferenz auf einem realen iPhone stabil startet oder fachlich ausreichend gute HEB-Texte erzeugt.
 
 ## Reale iPhone-Modelltests – bisherige Erkenntnisse
