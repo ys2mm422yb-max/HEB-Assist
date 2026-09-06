@@ -9,10 +9,10 @@
   <meta name="description" content="Lokaler HEB-Formulierungsassistent mit Datenschutzprüfung." />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./styles.css?build=20260906-v12" />
-  <link rel="stylesheet" href="./dark-mode.css?build=20260906-v12" />
-  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-v12" />
-  <link rel="stylesheet" href="./generation-progress.css?build=20260906-v12" />
+  <link rel="stylesheet" href="./styles.css?build=20260906-v13" />
+  <link rel="stylesheet" href="./dark-mode.css?build=20260906-v13" />
+  <link rel="stylesheet" href="./mobile-fixes.css?build=20260906-v13" />
+  <link rel="stylesheet" href="./generation-progress.css?build=20260906-v13" />
   <title>HEB Assist</title>
 </head>
 <body class="startup-locked">
@@ -23,7 +23,7 @@
       <p id="startupText">Das Sprachmodell wird direkt auf diesem Gerät gestartet.</p>
       <div id="startupProgressTrack" class="startup-progress-track" role="progressbar" aria-label="Ladefortschritt der lokalen KI" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="startupProgressBar" class="startup-progress-bar"></div></div>
       <div class="startup-progress-meta"><strong id="startupPercent">0 %</strong><span id="startupStage">Vorbereitung läuft …</span></div>
-      <p class="startup-note">Beim ersten Start wird Qwen 3.5 0.8B einmalig geladen und lokal im Browser gespeichert. HEB Assist nutzt nur den Textpfad des Modells. Bei späteren Starts werden Laufzeit und Modell aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
+      <p class="startup-note">Beim ersten Start wird die reine Textversion von Qwen 3.5 0.8B einmalig geladen und lokal im Browser gespeichert. Es werden keine Bild-/Vision-Modellteile geladen. Bei späteren Starts werden Laufzeit und Modell aus dem Gerätespeicher vorbereitet, solange iOS den Website-Speicher nicht entfernt.</p>
       <div id="startupError" class="startup-error" hidden><strong>Die lokale KI konnte nicht gestartet werden.</strong><p>HEB Assist bleibt gesperrt, damit kein HEB-Text ohne das Sprachmodell erzeugt wird.</p><details><summary>Technische Fehlermeldung anzeigen</summary><code id="startupErrorText"></code></details></div>
       <button id="startupRetryButton" class="primary-button startup-retry" type="button" hidden>KI erneut starten</button>
     </div>
@@ -44,7 +44,7 @@
     </section>
     <footer><span>HEB Assist · lokale Verarbeitung</span><button id="detailsButton" class="text-button" type="button">Technik & Datenschutz</button></footer>
   </main>
-  <dialog id="detailsDialog"><div class="dialog-body"><h2>Technik & Datenschutz</h2><p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist.</p><p>Die Transformers.js-/ONNX-Laufzeit wird mit HEB Assist selbst ausgeliefert. Qwen 3.5 0.8B wird beim ersten Start geladen und lokal im Browser gespeichert; HEB Assist lädt nur den Textpfad und keinen Vision-Encoder.</p><p>Nach erfolgreichem Erstdownload kann die KI ohne externen Inferenzserver lokal arbeiten. Offline-Betrieb ist möglich, solange Browser/PWA-Cache und Modellspeicher auf dem Gerät erhalten bleiben. iOS kann Website-Speicher unter Umständen entfernen.</p><p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p><p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p><div id="engineErrorBox" class="engine-error-box" hidden><strong>Technische Fehlermeldung</strong><code id="engineErrorText"></code><p>Diese Meldung enthält nur den technischen Startfehler der KI und keine HEB-Eingabe.</p></div><div class="dialog-actions"><button id="retryAiButton" class="secondary-button" type="button" hidden>KI erneut starten</button><button id="closeDialog" class="primary-button" type="button">Schließen</button></div></div></dialog>
-  <script type="module" src="./bootstrap.js?build=20260906-v12"></script>
+  <dialog id="detailsDialog"><div class="dialog-body"><h2>Technik & Datenschutz</h2><p>HEB Assist verarbeitet HEB-Eingaben nur, wenn das lokale Sprachmodell vollständig gestartet ist.</p><p>Die Transformers.js-/ONNX-Laufzeit wird mit HEB Assist selbst ausgeliefert. Verwendet wird die reine Text-ONNX-Version von Qwen 3.5 0.8B; Bild-/Vision-Modellteile werden nicht geladen.</p><p>Nach erfolgreichem Erstdownload kann die KI ohne externen Inferenzserver lokal arbeiten. Offline-Betrieb ist möglich, solange Browser/PWA-Cache und Modellspeicher auf dem Gerät erhalten bleiben. iOS kann Website-Speicher unter Umständen entfernen.</p><p>Sobald oben rechts „KI ist bereit ✓“ angezeigt wird, können HEB-Entwürfe erstellt werden. Die Fallbeschreibung wird dabei nicht an einen KI-Inferenzserver gesendet.</p><p>HEB Assist blockiert typische direkte Identifikatoren wie E-Mail-Adressen, Telefonnummern, konkrete Datumsangaben und erkennbare Adressmuster. Der Filter ersetzt keine fachliche Datenschutzprüfung.</p><div id="engineErrorBox" class="engine-error-box" hidden><strong>Technische Fehlermeldung</strong><code id="engineErrorText"></code><p>Diese Meldung enthält nur den technischen Startfehler der KI und keine HEB-Eingabe.</p></div><div class="dialog-actions"><button id="retryAiButton" class="secondary-button" type="button" hidden>KI erneut starten</button><button id="closeDialog" class="primary-button" type="button">Schließen</button></div></div></dialog>
+  <script type="module" src="./bootstrap.js?build=20260906-v13"></script>
 </body>
 </html>
