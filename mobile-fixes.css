@@ -1,0 +1,53 @@
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell,
+.workspace,
+.workspace > *,
+.panel,
+.input-panel,
+.result-panel,
+.topbar,
+.topbar > *,
+.startup-card,
+.result-heading,
+.result-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+select,
+textarea,
+input,
+button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 500px) {
+  .topbar > div:first-child {
+    min-width: 0;
+  }
+
+  .topbar > div[aria-label="Status der lokalen KI"] {
+    min-width: 0 !important;
+    width: min(44vw, 180px);
+    flex: 0 1 180px;
+  }
+
+  .status-badge {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
