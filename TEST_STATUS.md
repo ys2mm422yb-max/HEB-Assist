@@ -6,59 +6,62 @@ Stand: 2026-09-06
 
 HEB-Assist ist weiterhin ein Test-/Entwicklungsprojekt. Bis zur fachlichen und datenschutzrechtlichen Freigabe dürfen ausschließlich vollständig synthetische Testfälle verwendet werden.
 
-## Aktueller technischer Stand – v11
+## Aktueller technischer Stand – v12
 
-Der aktuell veröffentlichte Entwicklungsstand verwendet **Gemma 3 1B** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**.
+Der aktuell veröffentlichte Entwicklungsstand verwendet **Qwen 3.5 0.8B** über **Transformers.js 4.2.0 / ONNX Runtime WebGPU**.
 
-- Modell: `onnx-community/gemma-3-1b-it-ONNX`
-- Revision: `a58439f40017d3b99c7d378ff525e54e0ba08ebf`
+- Modell: `onnx-community/Qwen3.5-0.8B-ONNX`
+- Revision: `7126260ed8e5acbe7b5d0b84bbec84df50b63a87`
 - Datentyp: `q4f16`
+- für HEB-Assist angeforderte Modellteile: `embed_tokens` und `decoder_model_merged`
 - Inferenz: lokal im Browser über WebGPU
-- Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim GitHub-Pages-Deploy lokal mit HEB-Assist gebündelt.
-- Die Modellressourcen werden beim ersten Start von Hugging Face geladen und anschließend soweit vom Browser unterstützt lokal gecacht.
-- HEB-Eingaben bleiben gesperrt, bis das echte lokale Sprachmodell vollständig gestartet und einsatzbereit ist.
-- Es gibt keinen regel-/regexbasierten Ersatz-HEB und keinen externen KI-Inferenzserver für Falltexte.
+- Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim GitHub-Pages-Deploy lokal mit HEB-Assist gebündelt
+- die Modellressourcen werden beim ersten Start von Hugging Face geladen und anschließend soweit vom Browser unterstützt lokal gecacht
+- HEB-Eingaben bleiben gesperrt, bis das echte lokale Sprachmodell vollständig gestartet und einsatzbereit ist
+- es gibt keinen regel-/regexbasierten Ersatz-HEB und keinen externen KI-Inferenzserver für Falltexte
 
-Die Generierung erfolgt als zusammenhängende HEB-Synthese über die vollständige Eingabe und die zum gewählten HEB-Bogen gehörenden Unterpunkte. Anschließend prüft eine lokale Sicherheits-/Beleglogik die Ausgabe. Fällt diese Prüfung durch, wird der Text verworfen und ein Fehler angezeigt; die Prüfregeln formulieren keinen Ersatztext.
+Die Generierung erfolgt weiterhin als zusammenhängende HEB-Synthese über die vollständige Eingabe und die zum gewählten HEB-Bogen gehörenden Unterpunkte. Anschließend prüft eine lokale Sicherheits-/Beleglogik die Ausgabe. Fällt diese Prüfung durch, wird der Text verworfen und ein Fehler angezeigt; die Prüfregeln formulieren keinen Ersatztext.
 
-## v11 – GitHub/Deployment
+## v12 – GitHub/Deployment
 
-### Lauf #116
+### Commit `84ee5b327ee0ee56a455cb3635e38f7b0a9ddd7d`
 
-Commit `610283efb2a7a54190854d81b0c7ff76dbba752f` korrigierte zunächst die Pfade der ONNX-WebGPU-Runtime-Dateien. GitHub-Actions-Lauf #116 war vollständig grün und wurde erfolgreich auf GitHub Pages veröffentlicht.
+Dieser Commit stellte HEB-Assist von Gemma 3 1B auf Qwen 3.5 0.8B um und ergänzte einen iOS-Crash-Loop-Schutz.
 
-Der anschließende reale iPhone-Test zeigte jedoch unmittelbar beim Runtime-Import den Fehler:
+Der Schutz setzt vor einem Modellstart lokal einen technischen Marker aus Modellprofil und Startzeit. Wird der Safari-/PWA-Prozess während eines nicht abgeschlossenen Starts beendet und die App neu geladen, darf nicht automatisch erneut ein großer Modelldownload beginnen. Stattdessen zeigt HEB-Assist `Automatischer KI-Neustart gestoppt` bzw. `Erneuter Download gestoppt`. Ein neuer Versuch muss dann bewusst über `KI erneut starten` ausgelöst werden.
 
-`Module name, 'onnxruntime-web/webgpu' does not resolve to a valid URL.`
+GitHub-Actions-Lauf **#119** war vollständig erfolgreich und bestand **28 von 28 Browser-/Mobile-Smoke-Tests**. Der Stand wurde erfolgreich auf GitHub Pages veröffentlicht.
 
-Damit war klar, dass noch keine Modellinitialisierung stattgefunden hatte. Ursache war, dass `transformers.web.min.js` absichtlich externe npm-Imports für ONNX Runtime enthält und ohne Bundler/Import-Map nicht als eigenständiges Browser-Modul verwendet werden darf.
+### Nachträglich gefundener Modulinstanz-Fehler
 
-### Lauf #117
+Bei der anschließenden Codekontrolle vor dem realen iPhone-Test wurde ein Fehler im v12-Startpfad gefunden: `bootstrap.js` lud `ai-engine.js` zunächst mit einer Build-Query-URL, während `app.js` dieselbe Datei ohne Query importierte. Browser behandeln diese beiden URLs als getrennte ES-Module. Dadurch hätten zwei getrennte KI-Zustände entstehen können.
 
-Commit `a013da4f7ec772785831d487a9be8e7fc68de5ac` ergänzte erstmals einen echten Browser-Modulimport-Test. Dieser Lauf wurde korrekt **nicht deployed**, weil der Test einen weiteren nicht aufgelösten Import `onnxruntime-common` erkannte. Ergebnis: 20 Tests bestanden, 4 neue Runtime-Import-Tests schlugen fehl. Dadurch wurde ein fehlerhafter neuer Pages-Stand verhindert.
+Dieser Fehler wurde gefunden, bevor der Nutzer den v12-Kandidaten real testen sollte.
 
-### Lauf #118 – aktuell veröffentlichter App-Stand
+### Commit `781d095b88afece37c01fee9f252d2659b0d3649` – aktuell veröffentlichter App-Stand
 
-Commit `2b9b297f25bc6a1c4ec094183cb8c195e825e3f2` stellt den Runtime-Build auf die von Transformers.js selbst erzeugte **gebündelte Browser-Datei `transformers.min.js`** um. Die vorher verwendete `transformers.web.min.js` wird für HEB Assist nicht mehr als Browser-Runtime ausgeliefert.
+Der Fix stellt sicher, dass Bootstrap und App exakt dieselbe `./ai-engine.js`-Modulinstanz verwenden. Die CI enthält jetzt zusätzlich eine Sperre gegen unterschiedliche `ai-engine.js`-Import-URLs.
 
-GitHub-Actions-Lauf **#118** ist vollständig erfolgreich abgeschlossen:
+GitHub-Actions-Lauf **#120** ist vollständig erfolgreich abgeschlossen:
 
 - offizielle gebündelte Transformers.js-Browser-Runtime vorbereitet
 - JavaScript-Syntaxprüfungen bestanden
-- v11-Architekturprüfung bestanden
+- v12-Architekturprüfung bestanden
+- Qwen-3.5-Textsupport der lokalen Runtime geprüft
+- gemeinsame `ai-engine.js`-Modulinstanz geprüft
+- iOS-Crash-Loop-Schutz geprüft
 - synthetische Evidence-/Sicherheitsregressionen bestanden
-- echter Browser-Modulimport der lokalen Transformers.js-Runtime ohne npm-Auflösungsfehler bestanden
 - Chromium und WebKit bestanden
 - Android-ähnlicher Chromium-Viewport bestanden
 - iPhone-ähnlicher WebKit-Viewport bestanden
-- **24 von 24 Browser-Smoke-Tests bestanden**
+- **28 von 28 Browser-/Mobile-Smoke-Tests bestanden**
 - GitHub-Pages-Artefakt erfolgreich erstellt und hochgeladen
-- Pages-Deployment für exakt Commit `2b9b297f25bc6a1c4ec094183cb8c195e825e3f2` erstellt
+- Pages-Deployment für exakt Commit `781d095b88afece37c01fee9f252d2659b0d3649` erstellt
 - GitHub Pages meldete anschließend ausdrücklich `success`
 
 Die Test-Web-App wird unter `https://ys2mm422yb-max.github.io/HEB-Assist/` veröffentlicht.
 
-Diese automatisierten Tests beweisen weiterhin **nicht**, dass die echte WebGPU-Modellinitialisierung auf dem realen Ziel-iPhone stabil durchläuft oder fachlich ausreichend gute HEB-Texte erzeugt. Der reale Test hat inzwischen gezeigt, dass Gemma 3 1B auf dem Ziel-iPhone nicht bis zum Zustand „KI ist bereit“ kommt.
+Diese automatisierten Tests beweisen weiterhin **nicht**, dass Qwen 3.5 0.8B auf dem realen Ziel-iPhone vollständig initialisiert oder fachlich ausreichend gute HEB-Texte erzeugt.
 
 Reine spätere Markdown-Dokumentationsänderungen lösen keinen Pages-Deploy aus und verändern den veröffentlichten App-Code nicht.
 
@@ -76,34 +79,41 @@ Bewertung: **Qwen 3 0.6B wurde im damaligen Generierungsansatz für die eigentli
 
 ### Qwen 3 1.7B – v10
 
-Der Modelldownload lief auf dem realen iPhone bis 100 %. Direkt beim anschließenden Start/Initialisieren brach der Safari-Webseitenprozess ab. Die App erreichte nicht den Zustand „KI ist bereit“.
+Der Modelldownload lief auf dem realen iPhone bis 100 %. Direkt beim anschließenden Start/Initialisieren brach der Safari-Webseitenprozess ab. Die App erreichte nicht den Zustand `KI ist bereit`.
 
 Bewertung: **Qwen 3 1.7B im damaligen WebLLM/PWA-Ansatz ist auf dem getesteten iPhone nicht praktisch einsetzbar.** Dieser Weg wurde beendet.
 
 ### Gemma 3 1B – v11
 
-Der erste reale iPhone-Versuch mit v11 scheiterte noch vor dem Modelldownload am Browser-Modulimport mit `onnxruntime-web/webgpu does not resolve to a valid URL`. Dieser konkrete Runtime-Buildfehler wurde mit Commit `2b9b297f...` korrigiert und ist in den automatischen Browser-Modulimport-Tests nicht mehr reproduzierbar.
+Der erste reale iPhone-Versuch mit v11 scheiterte noch vor dem Modelldownload am Browser-Modulimport mit `onnxruntime-web/webgpu does not resolve to a valid URL`. Dieser konkrete Runtime-Buildfehler wurde später korrigiert.
 
-Beim anschließenden realen iPhone-Retest mit dem korrigierten Build wird der Modelldownload bis 100 % abgeschlossen. Unmittelbar beim anschließenden Initialisieren erreicht die App jedoch nicht „KI ist bereit“; stattdessen startet der Ladeablauf ohne Nutzereingriff erneut von vorn.
+Beim anschließenden realen iPhone-Retest mit dem korrigierten Build wurde der Modelldownload bis 100 % abgeschlossen. Unmittelbar beim anschließenden Initialisieren erreichte die App jedoch nicht `KI ist bereit`; stattdessen startete der Ladeablauf ohne Nutzereingriff erneut von vorn.
 
-Der aktuelle App-Code enthält innerhalb eines Seitenlaufs keinen automatischen Modell-Neustart nach 100 %. `generatorPromise` verhindert parallele bzw. doppelte Pipeline-Initialisierungen. Das beobachtete Zurückspringen auf einen frischen Ladeablauf ist daher mit einem Neustart des Safari/PWA-Seitenprozesses vereinbar und entspricht funktional einem fehlgeschlagenen realen Modellstart.
+Der damalige App-Code enthielt innerhalb eines Seitenlaufs keinen automatischen Modell-Neustart nach 100 %. `generatorPromise` verhinderte parallele bzw. doppelte Pipeline-Initialisierungen. Das beobachtete Zurückspringen auf einen frischen Ladeablauf war daher mit einem Neustart des Safari/PWA-Seitenprozesses vereinbar und entsprach funktional einem fehlgeschlagenen realen Modellstart.
 
 Bewertung: **Gemma 3 1B / q4f16 wird auf dem getesteten Ziel-iPhone nicht als stabil einsetzbar bewertet. Weitere wiederholte Downloads dieses Kandidaten sind nicht sinnvoll.**
 
-## Nächster technischer Schritt
+### Qwen 3.5 0.8B – v12
 
-Für den nächsten Modellkandidaten gelten zwei harte Kriterien gleichzeitig:
+Der aktuelle Kandidat ist kleiner als Gemma 3 1B und wird in HEB-Assist nur über den Textpfad geladen. Die Runtime-/Architekturprüfungen sind grün. Der entscheidende reale iPhone-Test des aktuellen veröffentlichten Commits `781d095b...` steht noch aus.
 
-1. Er muss auf dem realen iPhone zuverlässig vollständig initialisieren und mehrfach lokal generieren können.
-2. Die HEB-Ausgabe muss mit der aktuellen Evidence-/Sicherheitsarchitektur fachlich ausreichend sein; technisch stabile, aber sprachlich unbrauchbare Ausgabe gilt weiterhin als Fehlschlag.
+Qwen 3.5 0.8B gilt deshalb derzeit **weder als iPhone-stabil noch als fachlich geeignet bestätigt**.
 
-Vor einem weiteren großen realen iPhone-Download soll der nächste Kandidat soweit möglich anhand Modellgröße, Runtime-Kompatibilität und synthetischer Qualität vorgeprüft werden.
+## Nächster realer Test
+
+Beim nächsten iPhone-Test soll zunächst ausschließlich geprüft werden:
+
+1. startet der Modelldownload bzw. die Vorbereitung korrekt,
+2. erreicht das Modell nach dem Download tatsächlich `KI ist bereit ✓`,
+3. bleibt der Prozess danach stabil,
+4. verhindert der Crash-Loop-Schutz bei einem erneuten Prozessabbruch einen automatischen weiteren Großdownload.
+
+Erst wenn der Modellstart bestanden ist, folgt die fachliche Prüfung mit vollständig synthetischen HEB-Fällen.
 
 ## Weiterhin offen
 
-- Auswahl und Vorprüfung eines kleineren iPhone-tauglichen Modellkandidaten
-- vollständiger Modellstart dieses Kandidaten auf dem realen Ziel-iPhone bis „KI ist bereit“
-- vollständige HEB-Generierungen mit rein synthetischen Fällen
+- vollständiger Qwen-3.5-Modellstart auf dem realen Ziel-iPhone bis `KI ist bereit ✓`
+- eine vollständige HEB-Generierung mit einem rein synthetischen Fall
 - fachliche Qualität einschließlich Grammatik, HEB-Struktur, Ressourcenorientierung und fehlender Erfindungen
 - mehrere aufeinanderfolgende Generierungen auf dem realen iPhone
 - Verhalten nach erneutem Öffnen der PWA und Nutzung des lokalen Modell-Caches
