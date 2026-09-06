@@ -2,10 +2,15 @@
   "name": "heb-assist",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@mlc-ai/web-llm": "0.2.82"
+  },
   "devDependencies": {
-    "@playwright/test": "1.55.0"
+    "@playwright/test": "1.55.0",
+    "esbuild": "0.25.9"
   },
   "scripts": {
+    "build:runtime": "mkdir -p vendor && esbuild runtime-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=vendor/webllm.js",
     "test:browser": "playwright test"
   }
 }
