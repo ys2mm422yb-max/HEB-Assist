@@ -28,26 +28,28 @@ In v1 gilt:
 - keine serverseitige Chat-Historie
 - keine Analytics mit Texteingaben
 - keine Fehlerlogs mit vollständigen Texteingaben
-- keine Übertragung von HEB-Eingaben an GitHub Pages, Hugging Face oder einen sonstigen externen KI-Inferenzdienst zur Textgenerierung
+- keine Übertragung von HEB-Eingaben an GitHub Pages, Hugging Face, MLC/WebLLM oder einen sonstigen externen KI-Inferenzdienst zur Textgenerierung
 
-## Netzwerkzugriffe – aktueller Entwicklungsstand v14
+## Netzwerkzugriffe – aktueller Entwicklungsstand v15
 
 Für den Betrieb werden folgende externe Ressourcen benötigt:
 
-- **GitHub Pages:** Auslieferung der App-Dateien einschließlich der beim Deploy lokal gebündelten Transformers.js-/ONNX-Web-Runtime
-- **Hugging Face:** Download der für Qwen 3.5 0.8B Text benötigten Modellressourcen beim ersten Start bzw. wenn diese nicht mehr im Browser-Cache vorhanden sind
+- **GitHub Pages:** Auslieferung der statischen HEB-Assist-App einschließlich der beim Deploy lokal gebündelten WebLLM-JavaScript-Runtime
+- **Modell-/Runtime-Ressourcen des WebLLM-Modellprofils:** erstmaliger Download der Qwen-3.5-0.8B-MLC-Modellgewichte und der zugehörigen WebGPU-Modellbibliothek bzw. erneuter Download, wenn der Browser-Cache nicht mehr vorhanden ist
 
-HEB-Assist verwendet keine externe JavaScript-CDN für die KI-Laufzeit. Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim GitHub-Actions-Deploy aus den npm-Abhängigkeiten erzeugt und anschließend von GitHub Pages zusammen mit der App ausgeliefert.
+HEB-Assist verwendet keine externe JavaScript-CDN für die WebLLM-JavaScript-Laufzeit. `@mlc-ai/web-llm` 0.2.84 wird beim GitHub-Actions-Deploy installiert und als `vendor/webllm.js` zusammen mit der PWA von GitHub Pages ausgeliefert.
 
-Im v14-Build wird auf die lokal gebündelte Transformers.js-4.2.0-Runtime der bestätigte Upstream-Fix aus `huggingface/transformers.js` PR #1664 angewendet. Diese technische Korrektur betrifft die Wiederverwendung von Modelldatei-Anfragen bei aktivem Fortschritts-Callback und ändert den Datenfluss von HEB-Eingaben nicht.
+Verwendet wird das WebLLM-Modellprofil `Qwen3.5-0.8B-q4f16_1-MLC`. Es handelt sich für HEB-Assist um ein Textmodell; Bild-/Vision-Modellteile werden nicht verwendet.
 
-Für die HEB-Generierung fordert die Anwendung ausschließlich die Textkomponenten des dedizierten Qwen-3.5-Textmodells an. Bild-/Vision-Modellteile werden nicht geladen.
-
-Die Modell-Downloads von Hugging Face enthalten keinen HEB-Falltext als KI-Inferenzanfrage. Normale technische Verbindungsmetadaten wie IP-Adresse, User-Agent und Zeitstempel können bei den beteiligten Infrastrukturbetreibern anfallen.
+Die technischen Modell-Downloads enthalten keinen HEB-Falltext als KI-Inferenzanfrage. Normale technische Verbindungsmetadaten wie IP-Adresse, User-Agent und Zeitstempel können bei den beteiligten Infrastrukturbetreibern anfallen.
 
 Nach erfolgreichem Start des Modells erfolgt die eigentliche Textgenerierung lokal im Browser auf dem Endgerät. Der HEB-Falltext wird dabei nicht an einen externen KI-Inferenzserver geschickt.
 
-Browser und Betriebssystem entscheiden über Cache-Speicherung und mögliche Speicherbereinigung. Deshalb darf nicht garantiert werden, dass Modellressourcen dauerhaft lokal gespeichert bleiben oder niemals erneut geladen werden müssen.
+## Lokaler Modell-Cache
+
+v15 konfiguriert WebLLM mit der Browser Cache API und fordert best-effort persistenten Website-Speicher an. Browser und Betriebssystem entscheiden jedoch über Cache-Speicherung und mögliche Speicherbereinigung.
+
+Deshalb darf **nicht garantiert** werden, dass Modellressourcen dauerhaft lokal gespeichert bleiben oder niemals erneut geladen werden müssen. Ein späterer Offlinebetrieb ist erst nach einem vollständig erfolgreichen realen Geräte-Test belastbar zu beurteilen.
 
 ## Technischer Startschutz auf iOS
 
@@ -60,7 +62,7 @@ Dieser Marker enthält ausschließlich:
 
 Er enthält **keinen Falltext, keine HEB-Ausgabe und keine personenbezogenen Angaben**. Nach einem erfolgreichen Modellstart oder einem regulär abgefangenen technischen Fehler wird der Marker entfernt. Wird ein vorheriger Start als unvollständig erkannt, wird ein automatischer erneuter Modelldownload gestoppt; ein neuer Versuch muss bewusst manuell ausgelöst werden.
 
-v14 entfernt beim ersten Öffnen einmalig einen zurückgebliebenen v13-Startmarker, damit ein bereits unvollständiger v13-Versuch den ersten Start mit der korrigierten Runtime nicht blockiert. Dabei werden keine Fall- oder HEB-Daten gelesen oder verändert. Nach dieser einmaligen Migration bleibt der Startschutz für neue unvollständige Starts aktiv.
+v15 entfernt beim ersten Öffnen einmalig alte Startmarker der vorherigen Transformers.js-/ONNX-Architektur. Dabei werden keine Fall- oder HEB-Daten gelesen oder verändert. Danach bleibt der Startschutz für neue WebLLM-Modellstarts aktiv.
 
 ## Datenschutzfilter
 
