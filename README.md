@@ -29,25 +29,34 @@ HEB-Assist orientiert sich an den offiziellen bayerischen HEB-Bögen für Mensch
 
 Die fünf offiziellen HEB-Bereiche werden unverändert als Hauptbereiche verwendet. Die genaue Struktur steht in `HEB_REFERENCE.md`.
 
-## Technik – v12
+## Technik – v13
 
 - statische HTML/CSS/JavaScript-PWA ohne Backend
 - GitHub Pages als Test-Web-App
 - lokale Laufzeit: **Transformers.js 4.2.0 / ONNX Runtime WebGPU**
-- lokaler Modellkandidat: **Qwen 3.5 0.8B**, `onnx-community/Qwen3.5-0.8B-ONNX`
-- Modellrevision: `7126260ed8e5acbe7b5d0b84bbec84df50b63a87`
-- Quantisierung/Datentyp: `q4f16`
-- HEB-Assist fordert nur die Textkomponenten `embed_tokens` und `decoder_model_merged` an; ein Vision-Encoder wird von der Anwendung nicht für die HEB-Generierung verwendet
-- Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim Deploy lokal mit der PWA gebündelt und von GitHub Pages ausgeliefert
+- lokaler Modellkandidat: **Qwen 3.5 0.8B Text**, `onnx-community/Qwen3.5-0.8B-Text-ONNX`
+- gepinnte Modellrevision: `1e45daba048899e7f771657ada617ec49350aa91`
+- ausschließlich Textmodell; keine Vision-/Bildmodellteile
+- Quantisierung wird geräteabhängig gewählt: `q4f16`, wenn WebGPU `shader-f16` unterstützt, sonst `q4`
+- Transformers.js und die benötigten ONNX-Web-Runtime-Dateien werden beim Deploy lokal mit der PWA gebündelt
 - keine externe JavaScript-CDN für die KI-Laufzeit
 - Modellressourcen werden beim ersten Start von Hugging Face geladen und anschließend soweit vom Browser unterstützt lokal gecacht
 - die eigentliche HEB-Inferenz erfolgt lokal über WebGPU; der Falltext wird nicht als Prompt an einen externen KI-Inferenzdienst gesendet
 - Eingabe bleibt bis zum vollständigen Modellstart gesperrt
 - kein Supabase, kein Neon und keine sonstige Cloud-Datenbank
 
-Qwen 3.5 0.8B ist aktuell **Testkandidat**. Automatisierte Browserprüfungen belegen die Runtime-/App-Architektur, aber noch nicht, dass das Modell auf dem realen Ziel-iPhone vollständig initialisiert oder fachlich ausreichend gute HEB-Texte erzeugt.
+Qwen 3.5 0.8B Text ist weiterhin **Testkandidat**. Automatisierte Browserprüfungen belegen die Runtime-/App-Architektur, aber noch nicht, dass das Modell auf dem realen Ziel-iPhone vollständig initialisiert oder fachlich ausreichend gute HEB-Texte erzeugt.
 
-## v12: zusammenhängende HEB-Synthese mit lokaler Qualitätsprüfung
+## Warum v13 statt v12
+
+Der reale iPhone-Test von v12 blieb bei einer angezeigten Modellvorbereitung um 94 % stehen. Bei der anschließenden technischen Prüfung wurden zwei konkrete Probleme des v12-Wegs gefunden:
+
+1. v12 verwendete `onnx-community/Qwen3.5-0.8B-ONNX` mit einer `text-generation`-Pipeline. Dieses Repository ist ein multimodaler Qwen-3.5-Export und nicht der dedizierte Text-only-Export.
+2. Die Ladeanzeige basierte teilweise auf Fortschritten einzelner Dateien. Dadurch konnte die Oberfläche beispielsweise 94 % anzeigen, obwohl im Hintergrund eine weitere Modelldatei geladen oder vorbereitet wurde.
+
+v13 nutzt deshalb den dedizierten Text-only-ONNX-Export und wertet für den sichtbaren Gesamtfortschritt `progress_total` aus. Wenn Größeninformationen verfügbar sind, zeigt die Oberfläche zusätzlich geladene und gesamte MB an. Erst nach vollständigem Dateidownload wechselt die Anzeige ausdrücklich zur Initialisierung der KI.
+
+## HEB-Synthese und lokale Qualitätsprüfung
 
 1. Das lokale Sprachmodell erhält die vollständige Situation, den gewählten HEB-Bogen, den gewählten offiziellen Bereich und alle dazugehörigen Unterpunkte gemeinsam.
 2. Die Eingabe wird in Originalaussagen mit Beleg-IDs zerlegt, damit Aussagen der Ausgabe auf tatsächlich vorhandene Inhalte zurückgeführt werden können.
@@ -55,7 +64,7 @@ Qwen 3.5 0.8B ist aktuell **Testkandidat**. Automatisierte Browserprüfungen bel
 4. Jeder nicht fehlende Unterpunkt muss Belege aus der Originaleingabe referenzieren.
 5. Danach prüft eine lokale Sicherheits-/Beleglogik die Ausgabe. Bei einer klar unzulässigen oder nicht ausreichend belegten Ausgabe wird ein Fehler angezeigt und der Text verworfen.
 6. Die Prüfregeln schreiben selbst keinen Ersatz-HEB und es gibt keinen regel-/regexbasierten Fallback.
-7. Die Generierung wird gestreamt. Die Oberfläche zeigt den aktuellen Bearbeitungszustand, damit ein laufender Prozess von einem Fehler oder Hänger unterscheidbar bleibt.
+7. Die Generierung wird gestreamt. Die Oberfläche zeigt den aktuellen Bearbeitungszustand.
 8. HEB-Texte bleiben bewusst knapp, damit sie näher an die begrenzten Textfelder der offiziellen Bögen passen.
 
 ### Fachliche Leitplanken
@@ -63,14 +72,14 @@ Qwen 3.5 0.8B ist aktuell **Testkandidat**. Automatisierte Browserprüfungen bel
 - Ein verbaler Impuls zum Beginn einer Tätigkeit ist Hilfebedarf bei der **Initiierung**, nicht automatisch bei der Durchführung.
 - Vorhandene Selbstständigkeit bleibt als Ressource erhalten.
 - Ziele nur bei ausdrücklich genanntem Ziel, Wunsch oder gewünschter Veränderung.
-- HEB B/C: Entwicklung nur bei tatsächlich beschriebenem zeitlichem Verlauf.
+- HEB B/C: Entwicklung nur bei tatsächlich beschriebenem zeitlichen Verlauf.
 - Eine formale Hilfebedarfsstufe wird nur ausgegeben, wenn sie in der Eingabe ausdrücklich genannt ist.
 - Für HEB A darf eine konkret beschriebene laufende Unterstützung als dieselbe geplante Maßnahme benannt werden, wenn aus der Eingabe ihre Fortführung hervorgeht; zusätzliche oder intensivere Maßnahmen dürfen nicht ergänzt werden.
 - Fehlen ausreichende Angaben für einen offiziellen Unterpunkt, wird die Lücke kenntlich gemacht statt Inhalt zu erfinden.
 
 ## iOS-Startschutz
 
-v12 enthält einen Schutz gegen automatische Großdownload-Schleifen nach einem unerwarteten Safari-/PWA-Prozessabbruch während der Modellinitialisierung. Vor einem Modellstart wird lokal nur ein technischer Marker aus Modellprofil und Startzeit gesetzt. Wird die Seite während eines noch nicht abgeschlossenen Starts neu geladen, startet HEB-Assist den Modelldownload nicht automatisch erneut, sondern stoppt und verlangt einen bewussten manuellen Neustart.
+HEB-Assist enthält einen Schutz gegen automatische Großdownload-Schleifen nach einem unerwarteten Safari-/PWA-Prozessabbruch während der Modellinitialisierung. Vor einem Modellstart wird lokal nur ein technischer Marker aus Modellprofil und Startzeit gesetzt. Wird die Seite während eines noch nicht abgeschlossenen Starts neu geladen, startet HEB-Assist den Modelldownload nicht automatisch erneut, sondern stoppt und verlangt einen bewussten manuellen Neustart.
 
 Dieser Marker enthält keinen Falltext und keine HEB-Ausgabe. Nach einem erfolgreichen Modellstart oder einem regulär abgefangenen technischen Fehler wird er wieder entfernt.
 
@@ -90,7 +99,7 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 
 - JavaScript-Syntaxprüfungen
 - Build der lokal gebündelten Transformers.js-/ONNX-Web-Runtime
-- v12-Architekturprüfung
+- v13-Architekturprüfung für den dedizierten Qwen-3.5-Text-Export
 - Prüfung des Qwen-3.5-Textsupport-Exports der Runtime
 - Prüfung auf eine gemeinsame `ai-engine.js`-Modulinstanz
 - Prüfung des iOS-Crash-Loop-Schutzes
@@ -104,7 +113,7 @@ Vor jedem GitHub-Pages-Deploy werden unter anderem ausgeführt:
 - Dark Mode und mobile Viewport-Prüfungen
 - Manifest, Service Worker und lokal ausgelieferte Runtime-Dateien
 
-Der aktuell veröffentlichte v12-Stand `781d095b88afece37c01fee9f252d2659b0d3649` hat in GitHub-Actions-Lauf #120 **28 von 28 Browser-/Mobile-Smoke-Tests** bestanden und wurde von GitHub Pages erfolgreich veröffentlicht.
+Der erste v13-Lauf #125 wurde durch einen veralteten Testwert für das v12-Modellprofil korrekt gestoppt; 24 von 28 Browser-Tests waren grün. Der Test wurde auf das neue v13-Profil aktualisiert. GitHub-Actions-Lauf **#126** für Commit `a6c623b7551ae973c43480240f1f66aae1fb24c6` ist vollständig erfolgreich abgeschlossen; alle Browser-/Mobile-Smoke-Tests bestanden und GitHub Pages wurde erfolgreich deployed.
 
 Ein fehlgeschlagener relevanter Test verhindert den Deploy. Diese Tests ersetzen keine echte WebGPU-Inferenz auf einem realen iPhone, Android-Gerät oder Desktop und keine fachliche Qualitätsprüfung echter Modellgenerationen mit synthetischen Fällen.
 
