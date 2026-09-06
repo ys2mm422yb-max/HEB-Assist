@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@mlc-ai/web-llm": "0.2.82"
+    "@huggingface/transformers": "4.2.0"
   },
   "devDependencies": {
     "@playwright/test": "1.55.0"
   },
   "scripts": {
-    "build:runtime": "mkdir -p vendor && cp node_modules/@mlc-ai/web-llm/lib/index.js vendor/webllm.js",
+    "build:runtime": "mkdir -p vendor && cp node_modules/@huggingface/transformers/dist/transformers.web.min.js vendor/transformers.js && cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.mjs vendor/ && cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.wasm vendor/",
     "test:browser": "playwright test"
   }
 }
