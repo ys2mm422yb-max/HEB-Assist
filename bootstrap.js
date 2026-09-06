@@ -1,4 +1,23 @@
-const BUILD_ID = '2026-09-06-v13';
+const BUILD_ID = '2026-09-06-v14';
+const START_GUARD_KEY = 'heb-assist-ai-start-guard-v1';
+const V13_MODEL_PROFILE = 'transformersjs-qwen3.5-0.8b-text-only-adaptive-q4-heb-v13';
+const V14_GUARD_MIGRATION_KEY = 'heb-assist-v14-start-guard-migrated';
+
+function migrateIncompleteV13StartGuard() {
+  try {
+    if (localStorage.getItem(V14_GUARD_MIGRATION_KEY) === '1') return;
+    const raw = localStorage.getItem(START_GUARD_KEY);
+    if (raw) {
+      const guard = JSON.parse(raw);
+      if (guard?.profile === V13_MODEL_PROFILE) localStorage.removeItem(START_GUARD_KEY);
+    }
+    localStorage.setItem(V14_GUARD_MIGRATION_KEY, '1');
+  } catch {
+    // Best-effort migration only; no fall text or HEB output is stored here.
+  }
+}
+
+migrateIncompleteV13StartGuard();
 
 let serviceWorkerRegistration = null;
 let aiModule = null;
