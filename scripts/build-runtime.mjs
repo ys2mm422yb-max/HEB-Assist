@@ -25,7 +25,15 @@ let runtime = readFileSync(transformersSource, 'utf8');
 const buggyMemoKeyPattern = /([A-Za-z_$][\w$]*)\?\.revision,\s*\1\?\.cache_dir,\s*\1\?\.local_files_only,/g;
 const buggyMemoKeyMatches = [...runtime.matchAll(buggyMemoKeyPattern)];
 if (buggyMemoKeyMatches.length !== 1) {
-  throw new Error(`Transformers.js-4.2.0-Patch abgebrochen: erwartete Memoize-Stelle ${buggyMemoKeyMatches.length}× gefunden statt genau 1×.`);
+  let index = -1;
+  let seen = 0;
+  while ((index = runtime.indexOf('local_files_only', index + 1)) !== -1 && seen < 12) {
+    const start = Math.max(0, index - 320);
+    const end = Math.min(runtime.length, index + 420);
+    console.log(`TRANSFORMERS_RUNTIME_CONTEXT_${seen + 1}: ${runtime.slice(start, end).replace(/\s+/g, ' ')}`);
+    seen += 1;
+  }
+  throw new Error(`Transformers.js-4.2.0-Patch abgebrochen: erwartete Memoize-Stelle ${buggyMemoKeyMatches.length}× gefunden statt genau 1×; ${seen} Bundle-Kontexte protokolliert.`);
 }
 runtime = runtime.replace(buggyMemoKeyPattern, (_match, variable) => [
   `${variable}?.revision ?? 'main',`,
